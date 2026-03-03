@@ -1,0 +1,24 @@
+{
+  "name": "@openclaw/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw core: encrypted store, adapter registry, plugin host, sync/export cycles.",
+  "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./lib/*": "./src/lib/*",
+    "./adapters/*": "./src/adapters/*"
+  },
+  "scripts": {
+    "sync": "node src/sync-keys.mjs",
+    "import:token": "node src/import-secret.mjs",
+    "cycle:auto": "node src/auto-cycle.mjs",
+    "cycle:stable": "node src/stable-cycle.mjs",
+    "export:env": "node src/export-openclaw-env.mjs",
+    "export:json": "node src/export-openclaw-json.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

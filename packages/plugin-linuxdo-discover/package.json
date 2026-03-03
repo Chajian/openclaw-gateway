@@ -1,0 +1,25 @@
+{
+  "name": "@openclaw/plugin-linuxdo-discover",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw plugin: discover new-api sites from LinuxDo RSS feeds and upsert into config.",
+  "main": "src/index.mjs",
+  "openclaw": {
+    "type": "plugin",
+    "provides": {
+      "commands": ["discover:linuxdo", "upsert:linuxdo"],
+      "pipeline": ["linuxdo-discover", "linuxdo-upsert"]
+    }
+  },
+  "scripts": {
+    "discover": "node src/discover-linuxdo-public-sites.mjs",
+    "upsert": "node src/upsert-sites-from-discovery.mjs"
+  },
+  "dependencies": {
+    "@openclaw/core": "*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

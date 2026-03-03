@@ -1,0 +1,27 @@
+{
+  "name": "@openclaw/plugin-schedule-windows",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw plugin: Windows Task Scheduler integration with Feishu notifications.",
+  "main": "src/index.mjs",
+  "openclaw": {
+    "type": "plugin",
+    "provides": {
+      "commands": ["task:install"],
+      "schedules": ["stable-daily", "linuxdo-daily"]
+    }
+  },
+  "scripts": {
+    "cycle:stable": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-stable-cycle.ps1",
+    "cycle:linuxdo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-linuxdo-discovery-cycle.ps1",
+    "task:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-daily-task.ps1",
+    "task:install:linuxdo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-linuxdo-daily-task.ps1"
+  },
+  "dependencies": {
+    "@openclaw/core": "*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

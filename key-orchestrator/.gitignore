@@ -1,0 +1,5 @@
+data/
+config/sites.json
+config/provider-map.json
+*.log
+

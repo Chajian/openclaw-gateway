@@ -1,0 +1,883 @@
+<!--
+  主题: OpenClaw Docker 部署、安全隔离与 LinuxDo 功能实现
+  操作: 点击按钮或使用键盘 ← / → 切换步骤，空格播放，Home/End 跳到首尾
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw Docker 部署、安全与 LinuxDo - 交互式可视化</title>
+  <style>
+    :root {
+      --component: #42A5F5;
+      --service: #66BB6A;
+      --database: #FFA726;
+      --api-gateway: #26C6DA;
+      --external: #78909C;
+      --danger: #E53935;
+      --warning: #F9A825;
+      --ok: #2E7D32;
+      --ink-1: #122025;
+      --ink-2: #29434e;
+      --bg-1: #f4fbfa;
+      --bg-2: #e8f3f9;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Segoe UI Variable", "Microsoft YaHei", "PingFang SC", sans-serif;
+      background:
+        radial-gradient(circle at 12% 10%, rgba(38, 198, 218, 0.2), transparent 35%),
+        radial-gradient(circle at 88% 0%, rgba(255, 167, 38, 0.2), transparent 28%),
+        linear-gradient(160deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+      color: var(--ink-1);
+      padding: 18px;
+    }
+
+    .dashboard {
+      max-width: 1320px;
+      margin: 0 auto;
+    }
+
+    .title {
+      text-align: center;
+      font-size: clamp(1.5rem, 2.2vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      background: linear-gradient(110deg, #00838f 0%, #00796b 45%, #ef6c00 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--ink-2);
+      margin-bottom: 16px;
+      font-size: 0.96rem;
+    }
+
+    .dashboard-body {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 12px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.92);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(15, 37, 46, 0.1);
+      border: 1px solid rgba(38, 50, 56, 0.08);
+      padding: 14px;
+      transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 14px;
+      align-self: start;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: calc(100vh - 30px);
+      overflow-y: auto;
+    }
+
+    .stat {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      gap: 8px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+
+    .stat-key {
+      color: #546e7a;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+
+    .badge-ok {
+      background: rgba(46, 125, 50, 0.12);
+      color: var(--ok);
+      border-color: rgba(46, 125, 50, 0.3);
+    }
+
+    .badge-mid {
+      background: rgba(249, 168, 37, 0.14);
+      color: #7a5400;
+      border-color: rgba(249, 168, 37, 0.35);
+    }
+
+    .badge-risk {
+      background: rgba(229, 57, 53, 0.14);
+      color: #9f1d1d;
+      border-color: rgba(229, 57, 53, 0.35);
+    }
+
+    .main-area {
+      display: grid;
+      grid-template-rows: auto auto auto;
+      gap: 12px;
+    }
+
+    .main-viz h3,
+    .bottom-panel h3,
+    .detail h3,
+    .sidebar h3 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+      color: #0e4f5f;
+    }
+
+    .lanes {
+      display: grid;
+      gap: 12px;
+    }
+
+    .lane {
+      border: 1px solid #d7e5ea;
+      border-radius: 12px;
+      padding: 10px;
+      background: linear-gradient(180deg, #ffffff, #f9fdff);
+    }
+
+    .lane-title {
+      font-size: 0.88rem;
+      color: #607d8b;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .nodes {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 8px;
+    }
+
+    .node {
+      padding: 10px 8px;
+      border-radius: 10px;
+      border: 1px solid #cfd8dc;
+      background: #edf4f7;
+      color: #5a6f78;
+      text-align: center;
+      font-size: 0.83rem;
+      font-weight: 700;
+      transition: all 0.3s ease;
+      min-height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .node.active {
+      color: #0b2c37;
+      border-color: transparent;
+      box-shadow: 0 7px 14px rgba(0, 0, 0, 0.12);
+      transform: translateY(-2px);
+    }
+
+    .node.external.active { background: linear-gradient(135deg, #d7e5ec, #b7cad6); }
+    .node.gateway.active { background: linear-gradient(135deg, #9ce8ef, #56d2dc); }
+    .node.service.active { background: linear-gradient(135deg, #b8e8bf, #7fd48d); }
+    .node.storage.active { background: linear-gradient(135deg, #ffd9a8, #ffb457); }
+
+    .arrow-row {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: #607d8b;
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .arrow-chip {
+      border: 1px dashed #9fb4bf;
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #f6fbfd;
+    }
+
+    .arrow-chip.active {
+      border-color: #00838f;
+      color: #006978;
+      background: #ddf6f8;
+      font-weight: 700;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .detail-block {
+      background: #f9fcfe;
+      border: 1px solid #deeaef;
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    .detail-block h4 {
+      margin-bottom: 6px;
+      color: #115268;
+      font-size: 0.9rem;
+    }
+
+    .detail-block ul {
+      padding-left: 16px;
+      color: #37474f;
+      line-height: 1.45;
+      font-size: 0.85rem;
+    }
+
+    .detail-block li + li {
+      margin-top: 5px;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .btn {
+      padding: 8px 13px;
+      border: none;
+      border-radius: 8px;
+      background: #157d8f;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.84rem;
+      transition: opacity 0.2s, transform 0.2s;
+      font-weight: 700;
+    }
+
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .btn.secondary {
+      background: #607d8b;
+    }
+
+    #stepIndicator {
+      font-weight: 700;
+      color: #23414d;
+      min-width: 92px;
+      text-align: center;
+      font-size: 0.86rem;
+    }
+
+    #progressBar {
+      width: min(320px, 70vw);
+      accent-color: #00838f;
+    }
+
+    select {
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #b7ccd5;
+      background: #fff;
+      color: #27444f;
+    }
+
+    .timeline-title {
+      font-weight: 800;
+      color: #124a5b;
+      margin-bottom: 8px;
+      font-size: 1.05rem;
+    }
+
+    .timeline-desc {
+      color: #324b56;
+      line-height: 1.45;
+      margin-bottom: 8px;
+      font-size: 0.92rem;
+    }
+
+    .bottom-list {
+      list-style: none;
+      display: grid;
+      gap: 7px;
+      margin-top: 8px;
+      font-size: 0.86rem;
+    }
+
+    .bottom-list li {
+      padding: 8px;
+      border-left: 4px solid #74b3c2;
+      background: #f8fcfe;
+      border-radius: 6px;
+      color: #26414b;
+    }
+
+    .step-tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: #e1f2f5;
+      color: #0d5d6d;
+      font-size: 0.78rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .footer-note {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: #607d8b;
+    }
+
+    @media (max-width: 1080px) {
+      .dashboard-body {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: static;
+        max-height: none;
+      }
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .nodes {
+        grid-template-columns: 1fr 1fr;
+      }
+      .controls {
+        justify-content: flex-start;
+      }
+      #progressBar {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <h1 class="title">OpenClaw Docker 部署、安全隔离与 LinuxDo 实现</h1>
+    <p class="subtitle">基于当前目录文档的分步可视化审视</p>
+
+    <div class="dashboard-body">
+      <aside class="card sidebar">
+        <div>
+          <h3>当前快照</h3>
+          <div class="stat"><span class="stat-key">部署</span><span id="statDeploy"></span></div>
+          <div class="stat"><span class="stat-key">网络暴露</span><span id="statNetwork"></span></div>
+          <div class="stat"><span class="stat-key">密钥管理</span><span id="statSecret"></span></div>
+          <div class="stat"><span class="stat-key">隔离/沙箱</span><span id="statSandbox"></span></div>
+        </div>
+        <div>
+          <h3>风险等级</h3>
+          <span id="riskBadge" class="badge badge-mid">评估中</span>
+          <ul class="bottom-list" id="riskPoints"></ul>
+        </div>
+        <div>
+          <h3>你关心的问题</h3>
+          <ul class="bottom-list">
+            <li>OpenClaw 现在怎么 Docker 部署？</li>
+            <li>安全性、隔离、沙箱是否充分？</li>
+            <li>LinuxDo 监控推送是怎么跑起来的？</li>
+          </ul>
+        </div>
+      </aside>
+
+      <section class="main-area">
+        <div class="card main-viz">
+          <h3>架构与链路高亮</h3>
+          <div class="lanes">
+            <div class="lane">
+              <div class="lane-title">OpenClaw 主链路</div>
+              <div class="nodes">
+                <div id="node-user" class="node external">用户 / 浏览器 / Telegram</div>
+                <div id="node-gateway" class="node gateway">openclaw-gateway 容器</div>
+                <div id="node-model" class="node service">外部模型/STT 服务</div>
+                <div id="node-config" class="node storage">.openclaw 配置/工作区</div>
+              </div>
+              <div class="arrow-row">
+                <span id="flow-a" class="arrow-chip">请求: 18789 / 18790</span>
+                <span id="flow-b" class="arrow-chip">API 转发: provider baseUrl</span>
+                <span id="flow-c" class="arrow-chip">状态/会话落盘</span>
+              </div>
+            </div>
+            <div class="lane">
+              <div class="lane-title">LinuxDo 监控链路</div>
+              <div class="nodes">
+                <div id="node-rss" class="node external">LinuxDo latest/top RSS</div>
+                <div id="node-monitor" class="node service">linuxdo-monitor 容器</div>
+                <div id="node-filter" class="node gateway">关键词过滤 + 去重</div>
+                <div id="node-tg" class="node storage">Telegram 推送</div>
+              </div>
+              <div class="arrow-row">
+                <span id="flow-d" class="arrow-chip">10 分钟轮询</span>
+                <span id="flow-e" class="arrow-chip">命中规则触发推送</span>
+                <span id="flow-f" class="arrow-chip">Volume 记录已推送项</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card detail">
+          <span id="stepTag" class="step-tag"></span>
+          <div id="stepTitle" class="timeline-title"></div>
+          <p id="stepDesc" class="timeline-desc"></p>
+          <div class="detail-grid">
+            <div class="detail-block">
+              <h4>部署方式</h4>
+              <ul id="deploymentPoints"></ul>
+            </div>
+            <div class="detail-block">
+              <h4>安全/隔离/沙箱</h4>
+              <ul id="securityPoints"></ul>
+            </div>
+            <div class="detail-block">
+              <h4>LinuxDo 实现</h4>
+              <ul id="linuxdoPoints"></ul>
+            </div>
+          </div>
+          <div class="footer-note">说明: 结论来自 `OPENCLAW-DOCKER-GUIDE.md`，未出现的配置按“文档未明确”处理。</div>
+        </div>
+
+        <div class="card bottom-panel">
+          <h3>步骤控制</h3>
+          <div class="controls">
+            <button class="btn" id="prevBtn" onclick="prevStep()">◀ 上一步</button>
+            <button class="btn" id="playBtn" onclick="togglePlay()">▶ 播放</button>
+            <button class="btn" id="nextBtn" onclick="nextStep()">下一步 ▶</button>
+            <span id="stepIndicator">步骤 1 / N</span>
+            <input type="range" id="progressBar" min="0" max="0" value="0" oninput="goToStep(parseInt(this.value, 10))">
+            <select onchange="setSpeed(this.value)">
+              <option value="2200">慢速</option>
+              <option value="1200" selected>正常</option>
+              <option value="700">快速</option>
+            </select>
+            <button class="btn secondary" onclick="goToStep(0)">⟲ 重置</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const steps = [
+      {
+        tag: "架构全览",
+        title: "当前体系是双容器业务链: OpenClaw 网关 + LinuxDo 监控",
+        desc: "文档显示运行中容器有 openclaw-gateway 与 linuxdo-monitor。前者负责 AI Agent 网关，后者负责 RSS 检测并经 Telegram 推送。",
+        deployment: [
+          "OpenClaw 镜像: openclaw:local（源码构建）",
+          "网关端口: 18789 / 18790",
+          "LinuxDo 独立 compose，单独目录运行"
+        ],
+        security: [
+          "默认看到的是功能联通优先，不是最小暴露优先",
+          "敏感配置存在于 openclaw.json/.env 明文示例",
+          "安全基线未在文档中形成独立章节"
+        ],
+        linuxdo: [
+          "读取 latest.rss + top.rss",
+          "命中关键词后推送 Telegram",
+          "通过 volume 保存已推送记录"
+        ],
+        activeNodes: ["node-user", "node-gateway", "node-monitor", "node-tg"],
+        activeFlows: ["flow-a", "flow-d", "flow-e"],
+        stats: {
+          deploy: '<span class="badge badge-ok">Compose 双服务</span>',
+          network: '<span class="badge badge-mid">LAN 暴露</span>',
+          secret: '<span class="badge badge-risk">明文示例</span>',
+          sandbox: '<span class="badge badge-mid">部分隔离</span>'
+        },
+        risk: "mid",
+        riskPoints: ["网络边界清晰但偏宽", "密钥暴露风险高于容器逃逸风险"]
+      },
+      {
+        tag: "部署细节",
+        title: "OpenClaw 采用本地源码 + Docker Compose 启停",
+        desc: "主要目录在 C:\\Users\\KSG\\openclaw，配置与工作数据在 C:\\Users\\KSG\\.openclaw 挂载持久化。",
+        deployment: [
+          "compose 命令: up/down/restart openclaw-gateway",
+          "CLI 诊断通过 docker compose exec openclaw-gateway",
+          "明确要求避免 run openclaw-cli"
+        ],
+        security: [
+          "配置目录与业务数据持久化，便于审计",
+          "但也扩大了主机侧数据暴露面",
+          "未见只读挂载、文件权限基线说明"
+        ],
+        linuxdo: [
+          "LinuxDo 项目在独立路径与镜像",
+          "支持 --build 更新后重启",
+          "可删除 volume 强制全量重扫"
+        ],
+        activeNodes: ["node-gateway", "node-config", "node-monitor"],
+        activeFlows: ["flow-c", "flow-f"],
+        stats: {
+          deploy: '<span class="badge badge-ok">源码构建 + Compose</span>',
+          network: '<span class="badge badge-mid">按需映射端口</span>',
+          secret: '<span class="badge badge-risk">主机可直接读配置</span>',
+          sandbox: '<span class="badge badge-mid">未声明沙箱策略</span>'
+        },
+        risk: "mid",
+        riskPoints: ["宿主机数据权限需强化", "缺少运行用户/能力裁剪信息"]
+      },
+      {
+        tag: "网络与访问",
+        title: "网关绑定 LAN，并启用 allowedOrigins + Host Header 回退",
+        desc: "OPENCLAW_GATEWAY_BIND=lan 对应非 loopback 暴露；为解决控制台跨源问题，配置了 allowedOrigins 和 dangerouslyAllowHostHeaderOriginFallback。",
+        deployment: [
+          "控制台允许 localhost/127.0.0.1 来源",
+          "端口对局域网可达（取决于主机防火墙）",
+          "网关 token 由环境变量传入"
+        ],
+        security: [
+          "dangerouslyAllowHostHeaderOriginFallback 代表放宽校验",
+          "LAN 模式在家庭/办公网都应视为外部可达",
+          "建议至少限制防火墙来源 IP 段"
+        ],
+        linuxdo: [
+          "与网关网络隔离未在文档中明确",
+          "若共享默认 bridge，横向访问面会增加",
+          "可考虑单独 network 并限制互通"
+        ],
+        activeNodes: ["node-user", "node-gateway"],
+        activeFlows: ["flow-a"],
+        stats: {
+          deploy: '<span class="badge badge-ok">网关可远程管理</span>',
+          network: '<span class="badge badge-risk">LAN 暴露 + 放宽校验</span>',
+          secret: '<span class="badge badge-risk">token 仍在 env 明文</span>',
+          sandbox: '<span class="badge badge-mid">网络隔离待加强</span>'
+        },
+        risk: "high",
+        riskPoints: ["控制面暴露扩大", "Host Header 回退应谨慎保留"]
+      },
+      {
+        tag: "模型与语音",
+        title: "模型路由与 STT 通过外部 API Base URL 转发",
+        desc: "默认主模型是 anthropic/claude-opus-4-6，fallback 为 openai/gpt-4o；语音识别走 SiliconFlow 的 OpenAI 兼容接口。",
+        deployment: [
+          "providers 通过 baseUrl 对接第三方中转",
+          "音频模型在 tools.media.audio 中配置",
+          "cron 能并发执行，maxConcurrentRuns=5"
+        ],
+        security: [
+          "关键风险集中在 API Key 管理和外部依赖可信度",
+          "站点不可用（CF 1033）说明 fallback 可触发切换",
+          "建议对外域做 egress 白名单"
+        ],
+        linuxdo: [
+          "LinuxDo 与模型路由无直接耦合",
+          "监控推送可独立于模型链路运行",
+          "两条链路故障域不同，便于隔离排障"
+        ],
+        activeNodes: ["node-gateway", "node-model"],
+        activeFlows: ["flow-b"],
+        stats: {
+          deploy: '<span class="badge badge-ok">主备模型策略</span>',
+          network: '<span class="badge badge-mid">外连依赖较多</span>',
+          secret: '<span class="badge badge-risk">多 key 明文管理</span>',
+          sandbox: '<span class="badge badge-mid">未见 egress 策略</span>'
+        },
+        risk: "high",
+        riskPoints: ["第三方中转可信链长", "密钥泄漏后影响面大"]
+      },
+      {
+        tag: "LinuxDo 实现",
+        title: "LinuxDo 功能是“RSS 轮询 + 关键词规则 + 去重推送”",
+        desc: "每 10 分钟抓取 latest.rss/top.rss；高置信词单命中即推送，中置信词需至少 2 个；排除词阻断误报。",
+        deployment: [
+          "容器名 linuxdo-monitor，独立 Dockerfile",
+          "日志通过 docker logs 观察",
+          "volume 持久化防重复推送"
+        ],
+        security: [
+          "功能上有 Cloudflare 429 风险，需要限速",
+          "未见对 Telegram 凭证的额外密钥保护",
+          "建议把 bot token 转 secrets 文件"
+        ],
+        linuxdo: [
+          "抓取源: latest.rss + top.rss",
+          "策略: 高置信(29) + 中置信(13,>=2) + 排除词",
+          "推送对象: @lingyang4_bot 指定 chat id"
+        ],
+        activeNodes: ["node-rss", "node-monitor", "node-filter", "node-tg"],
+        activeFlows: ["flow-d", "flow-e", "flow-f"],
+        stats: {
+          deploy: '<span class="badge badge-ok">流程清晰可重放</span>',
+          network: '<span class="badge badge-mid">依赖外部 RSS 可用性</span>',
+          secret: '<span class="badge badge-risk">Telegram 凭证需加固</span>',
+          sandbox: '<span class="badge badge-mid">容器权限未明确</span>'
+        },
+        risk: "mid",
+        riskPoints: ["误报与漏报并存", "凭证管理仍是主风险"]
+      },
+      {
+        tag: "隔离评估",
+        title: "隔离与沙箱: 已有容器边界，但不等于强沙箱",
+        desc: "从文档能看到的是“服务分容器”；但未见 seccomp、AppArmor、no-new-privileges、只读根文件系统、cap_drop 等硬化项。",
+        deployment: [
+          "目前隔离主要依赖 Docker 默认 namespace/cgroup",
+          "OpenClaw 与 LinuxDo 分开部署是加分项",
+          "没有列出专门的 runtime 安全参数"
+        ],
+        security: [
+          "可判断为“基础隔离已考虑，强沙箱未明确”",
+          "若容器以高权限运行，逃逸后影响宿主机",
+          "需要补齐最小权限运行基线"
+        ],
+        linuxdo: [
+          "建议 LinuxDo 容器仅保留出站能力",
+          "禁用不必要系统调用和写路径",
+          "数据目录最小授权"
+        ],
+        activeNodes: ["node-gateway", "node-monitor", "node-config"],
+        activeFlows: ["flow-c", "flow-f"],
+        stats: {
+          deploy: '<span class="badge badge-ok">有服务级拆分</span>',
+          network: '<span class="badge badge-mid">默认 bridge 可能过宽</span>',
+          secret: '<span class="badge badge-risk">未使用 Docker secrets</span>',
+          sandbox: '<span class="badge badge-risk">强沙箱未见证据</span>'
+        },
+        risk: "high",
+        riskPoints: ["容器硬化项缺失", "默认能力集可能过大"]
+      },
+      {
+        tag: "主要风险",
+        title: "当前更紧迫的是凭证与控制面暴露",
+        desc: "密钥、token、bot 信息在文档与配置中可见；控制面 LAN 暴露且策略放宽。这两项应先于功能扩展处理。",
+        deployment: [
+          "文档里直接出现 key/token 前缀信息",
+          "gateway token 在 .env 明文",
+          "Telegram allowFrom: [\"*\"] 对外放开 DM"
+        ],
+        security: [
+          "高优先级: 轮换全部泄露凭证",
+          "高优先级: 收紧网络来源 + 关闭危险回退",
+          "中优先级: 引入 secrets 与审计日志"
+        ],
+        linuxdo: [
+          "429 限流通过延迟与周期优化缓解",
+          "分类 RSS 被拦截导致监控盲区",
+          "只保留全站 RSS 时应提高筛选质量"
+        ],
+        activeNodes: ["node-user", "node-gateway", "node-tg"],
+        activeFlows: ["flow-a", "flow-e"],
+        stats: {
+          deploy: '<span class="badge badge-mid">功能可用但暴露偏高</span>',
+          network: '<span class="badge badge-risk">控制面需收口</span>',
+          secret: '<span class="badge badge-risk">立即轮换</span>',
+          sandbox: '<span class="badge badge-risk">需补硬化</span>'
+        },
+        risk: "high",
+        riskPoints: ["凭证泄漏是最高风险", "暴露面与攻击面高度重合"]
+      },
+      {
+        tag: "改进路径",
+        title: "一套可执行的加固顺序",
+        desc: "先止血（轮换密钥、收紧来源），再硬化（最小权限容器），最后做可观测性（审计与告警）。",
+        deployment: [
+          "把敏感值迁移到 Docker secrets 或外部密钥管理",
+          "compose 增加 healthcheck、restart 策略与资源上限",
+          "分离控制面与数据面网络"
+        ],
+        security: [
+          "容器参数: read_only, cap_drop, no-new-privileges",
+          "profile: seccomp + AppArmor/SELinux",
+          "网关只允许可信网段访问，必要时加反向代理鉴权"
+        ],
+        linuxdo: [
+          "将 token 与 chat id 移入 .env.example + secrets",
+          "对 RSS 抓取加退避重试和请求签名日志",
+          "加入推送失败重试与告警阈值"
+        ],
+        activeNodes: ["node-gateway", "node-model", "node-monitor", "node-filter"],
+        activeFlows: ["flow-b", "flow-d", "flow-f"],
+        stats: {
+          deploy: '<span class="badge badge-ok">可分阶段落地</span>',
+          network: '<span class="badge badge-ok">可快速收口</span>',
+          secret: '<span class="badge badge-ok">可迁移到 secrets</span>',
+          sandbox: '<span class="badge badge-ok">可升级到强沙箱</span>'
+        },
+        risk: "mid",
+        riskPoints: ["先做凭证轮换", "再做容器最小权限与网络细分"]
+      }
+    ];
+
+    let currentStep = 0;
+    const totalSteps = steps.length;
+    let isPlaying = false;
+    let playTimer = null;
+    let playSpeed = 1200;
+
+    function nextStep() {
+      if (currentStep < totalSteps - 1) {
+        currentStep++;
+        render();
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 0) {
+        currentStep--;
+        render();
+      }
+    }
+
+    function goToStep(n) {
+      currentStep = Math.max(0, Math.min(n, totalSteps - 1));
+      render();
+    }
+
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      if (isPlaying) {
+        playTimer = setInterval(() => {
+          if (currentStep < totalSteps - 1) {
+            nextStep();
+          } else {
+            togglePlay();
+          }
+        }, playSpeed);
+      } else {
+        clearInterval(playTimer);
+      }
+      updatePlayButton();
+    }
+
+    function setSpeed(speed) {
+      playSpeed = parseInt(speed, 10);
+      if (isPlaying) {
+        clearInterval(playTimer);
+        playTimer = setInterval(() => {
+          if (currentStep < totalSteps - 1) {
+            nextStep();
+          } else {
+            togglePlay();
+          }
+        }, playSpeed);
+      }
+    }
+
+    function updatePlayButton() {
+      const btn = document.getElementById("playBtn");
+      if (btn) {
+        btn.textContent = isPlaying ? "⏸ 暂停" : "▶ 播放";
+      }
+    }
+
+    function asList(containerId, items) {
+      const el = document.getElementById(containerId);
+      el.innerHTML = "";
+      items.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        el.appendChild(li);
+      });
+    }
+
+    function resetHighlights() {
+      document.querySelectorAll(".node").forEach((node) => node.classList.remove("active"));
+      document.querySelectorAll(".arrow-chip").forEach((chip) => chip.classList.remove("active"));
+    }
+
+    function setRisk(risk) {
+      const badge = document.getElementById("riskBadge");
+      badge.className = "badge";
+      if (risk === "high") {
+        badge.classList.add("badge-risk");
+        badge.textContent = "高风险";
+      } else if (risk === "mid") {
+        badge.classList.add("badge-mid");
+        badge.textContent = "中风险";
+      } else {
+        badge.classList.add("badge-ok");
+        badge.textContent = "低风险";
+      }
+    }
+
+    function updateStepIndicator() {
+      const indicator = document.getElementById("stepIndicator");
+      indicator.textContent = `步骤 ${currentStep + 1} / ${totalSteps}`;
+
+      const progress = document.getElementById("progressBar");
+      progress.max = totalSteps - 1;
+      progress.value = currentStep;
+    }
+
+    function updateButtons() {
+      document.getElementById("prevBtn").disabled = currentStep === 0;
+      document.getElementById("nextBtn").disabled = currentStep === totalSteps - 1;
+    }
+
+    function render() {
+      const step = steps[currentStep];
+      document.getElementById("stepTag").textContent = step.tag;
+      document.getElementById("stepTitle").textContent = step.title;
+      document.getElementById("stepDesc").textContent = step.desc;
+
+      asList("deploymentPoints", step.deployment);
+      asList("securityPoints", step.security);
+      asList("linuxdoPoints", step.linuxdo);
+      asList("riskPoints", step.riskPoints);
+
+      document.getElementById("statDeploy").innerHTML = step.stats.deploy;
+      document.getElementById("statNetwork").innerHTML = step.stats.network;
+      document.getElementById("statSecret").innerHTML = step.stats.secret;
+      document.getElementById("statSandbox").innerHTML = step.stats.sandbox;
+
+      setRisk(step.risk);
+      resetHighlights();
+      step.activeNodes.forEach((id) => document.getElementById(id).classList.add("active"));
+      step.activeFlows.forEach((id) => document.getElementById(id).classList.add("active"));
+
+      updateStepIndicator();
+      updateButtons();
+    }
+
+    document.addEventListener("keydown", (e) => {
+      switch (e.key) {
+        case "ArrowLeft":
+          prevStep();
+          break;
+        case "ArrowRight":
+          nextStep();
+          break;
+        case " ":
+          e.preventDefault();
+          togglePlay();
+          break;
+        case "Home":
+          goToStep(0);
+          break;
+        case "End":
+          goToStep(totalSteps - 1);
+          break;
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>

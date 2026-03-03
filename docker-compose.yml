@@ -1,0 +1,65 @@
+services:
+  # ---- 初始化：生成配置文件 ----
+  config-init:
+    image: busybox
+    volumes:
+      - openclaw-config:/config
+      - ./config/openclaw.json.example:/tpl/openclaw.json.example:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ ! -f /config/openclaw.json ]; then
+          cp /tpl/openclaw.json.example /config/openclaw.json
+          echo "[config-init] created /config/openclaw.json from template"
+        else
+          echo "[config-init] /config/openclaw.json already exists, skipping"
+        fi
+
+  # ---- Gateway：Telegram/飞书/Discord → LLM 路由 ----
+  openclaw-gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      - OPENCLAW_CONFIG=/config/openclaw.json
+    volumes:
+      - openclaw-config:/config
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+    restart: unless-stopped
+
+  # ---- LinuxDo 福利监控 → Telegram 推送 ----
+  linuxdo-monitor:
+    build:
+      context: ./services/linuxdo-monitor
+    env_file: .env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - MONITOR_INTERVAL_MS=${MONITOR_INTERVAL_MS:-600000}
+    restart: unless-stopped
+
+  # ---- Key 管线：定时同步 + 导出 openclaw.json ----
+  key-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.key-orchestrator
+    depends_on:
+      config-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      - KEYHUB_MASTER_KEY=${KEYHUB_MASTER_KEY}
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 10 9 * * *}
+    volumes:
+      - openclaw-config:/config
+      - key-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  openclaw-config:
+  key-data:

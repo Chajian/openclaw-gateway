@@ -1,0 +1,10 @@
+{
+  "targets": [
+    {
+      "siteId": "demo-public-site",
+      "provider": "openai",
+      "strategy": "highest_quota"
+    }
+  ]
+}
+

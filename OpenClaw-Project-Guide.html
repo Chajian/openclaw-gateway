@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw 项目可视化指南</title>
+  <style>
+    :root {
+      /* 架构配色 */
+      --gateway: #42A5F5;
+      --orchestrator: #66BB6A;
+      --monitor: #FFA726;
+      --database: #AB47BC;
+      --telegram: #26C6DA;
+      --feishu: #5C6BC0;
+      --external: #78909C;
+      --newapi: #EF5350;
+
+      /* 流程配色 */
+      --flow-discover: #26C6DA;
+      --flow-upsert: #42A5F5;
+      --flow-onboard: #7E57C2;
+      --flow-sync: #66BB6A;
+      --flow-export: #FFA726;
+      --flow-cycle: #EF5350;
+
+      /* 通用 */
+      --primary: #2196F3;
+      --bg: #0f1923;
+      --bg-card: #162231;
+      --bg-card-hover: #1d2d40;
+      --text: #e0e6ed;
+      --text-muted: #7a8a9e;
+      --border: #263545;
+      --accent: #4fc3f7;
+      --gradient-title: linear-gradient(135deg, #4fc3f7 0%, #7c4dff 50%, #ff6090 100%);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* === 布局 === */
+    .dashboard {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 30px 0 20px;
+    }
+
+    .header h1 {
+      font-size: 2.2em;
+      background: var(--gradient-title);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+    }
+
+    .header .subtitle {
+      color: var(--text-muted);
+      font-size: 1em;
+    }
+
+    .dashboard-body {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    /* === 侧边栏 === */
+    .sidebar {
+      position: sticky;
+      top: 20px;
+      align-self: start;
+    }
+
+    .nav-list {
+      list-style: none;
+      background: var(--bg-card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .nav-list li {
+      padding: 14px 18px;
+      cursor: pointer;
+      transition: all 0.25s;
+      border-left: 3px solid transparent;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .nav-list li:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .nav-list li.active {
+      background: var(--bg-card-hover);
+      border-left-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .nav-list li .nav-icon {
+      font-size: 16px;
+      width: 22px;
+      text-align: center;
+    }
+
+    .nav-list li + li {
+      border-top: 1px solid var(--border);
+    }
+
+    /* === 主区域 === */
+    .main-area {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 16px;
+      transition: border-color 0.3s;
+    }
+
+    .card:hover {
+      border-color: rgba(79, 195, 247, 0.3);
+    }
+
+    .card h2 {
+      font-size: 1.3em;
+      margin-bottom: 16px;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card h3 {
+      font-size: 1.05em;
+      margin: 16px 0 10px;
+      color: #b0bec5;
+    }
+
+    /* === 架构图 SVG === */
+    .arch-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .arch-container svg {
+      width: 100%;
+      min-width: 800px;
+      height: auto;
+    }
+
+    .arch-node {
+      cursor: pointer;
+      transition: filter 0.3s;
+    }
+
+    .arch-node:hover {
+      filter: brightness(1.25);
+    }
+
+    .arch-node rect, .arch-node ellipse {
+      transition: stroke-width 0.3s;
+    }
+
+    .arch-node:hover rect, .arch-node:hover ellipse {
+      stroke-width: 3;
+    }
+
+    .tooltip-panel {
+      background: #1a2a3a;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 12px;
+      min-height: 80px;
+      font-size: 14px;
+      line-height: 1.7;
+      transition: opacity 0.3s;
+    }
+
+    .tooltip-panel .tp-title {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    .tooltip-panel code {
+      background: rgba(79, 195, 247, 0.15);
+      color: #80d8ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    /* === Pipeline 可视化 === */
+    .pipeline {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 20px 0;
+    }
+
+    .pipe-step {
+      flex: 0 0 auto;
+      width: 150px;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+
+    .pipe-step:hover {
+      transform: translateY(-4px);
+    }
+
+    .pipe-step .step-circle {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      margin: 0 auto 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      border: 3px solid transparent;
+      transition: all 0.4s;
+      position: relative;
+    }
+
+    .pipe-step.active .step-circle {
+      border-color: #fff;
+      box-shadow: 0 0 20px rgba(255,255,255,0.3);
+      transform: scale(1.15);
+    }
+
+    .pipe-step .step-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      transition: color 0.3s;
+    }
+
+    .pipe-step.active .step-label {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .pipe-arrow {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      padding-top: 18px;
+      color: var(--text-muted);
+      font-size: 18px;
+    }
+
+    .pipe-detail {
+      background: #1a2a3a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 8px;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    .pipe-detail .pd-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .pipe-detail .pd-cmd {
+      background: #0d1520;
+      border: 1px solid #2a3a4a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      color: #80d8ff;
+      margin: 8px 0;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin: 0 2px;
+    }
+
+    .tag-adapter { background: rgba(102, 187, 106, 0.2); color: #66BB6A; }
+    .tag-output { background: rgba(255, 167, 38, 0.2); color: #FFA726; }
+    .tag-config { background: rgba(171, 71, 190, 0.2); color: #CE93D8; }
+    .tag-secret { background: rgba(239, 83, 80, 0.2); color: #EF5350; }
+    .tag-channel { background: rgba(38, 198, 218, 0.2); color: #26C6DA; }
+
+    /* === 控制栏 === */
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    #stepIndicator {
+      color: var(--text-muted);
+      font-size: 13px;
+      min-width: 80px;
+      text-align: center;
+    }
+
+    #progressBar {
+      width: 140px;
+      accent-color: var(--accent);
+    }
+
+    /* === 通道示意 === */
+    .channel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .channel-card {
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      transition: border-color 0.3s;
+    }
+
+    .channel-card:hover {
+      border-color: rgba(79,195,247,0.3);
+    }
+
+    .channel-card h3 {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+    }
+
+    .channel-card .ch-icon {
+      font-size: 28px;
+    }
+
+    .ch-flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 6px 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .ch-flow .arrow { color: var(--accent); }
+
+    /* === 目录树 === */
+    .file-tree {
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.9;
+      color: var(--text-muted);
+      padding: 16px;
+      background: #0d1520;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    .file-tree .ft-dir { color: var(--accent); }
+    .file-tree .ft-file { color: #b0bec5; }
+    .file-tree .ft-comment { color: #546e7a; font-style: italic; }
+    .file-tree .ft-important { color: #ffab40; font-weight: 600; }
+
+    /* === 配置表格 === */
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .config-table th {
+      background: #1a2a3a;
+      color: var(--accent);
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 2px solid var(--border);
+      font-weight: 600;
+    }
+
+    .config-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .config-table tr:hover td {
+      background: rgba(79,195,247,0.05);
+    }
+
+    .config-table code {
+      background: rgba(79,195,247,0.12);
+      color: #80d8ff;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+
+    /* === 命令参考 === */
+    .cmd-group {
+      margin-bottom: 20px;
+    }
+
+    .cmd-group h3 {
+      color: var(--accent);
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .cmd-item {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(38,53,69,0.6);
+      font-size: 13px;
+    }
+
+    .cmd-item .cmd-code {
+      font-family: 'Consolas', monospace;
+      color: #80d8ff;
+      background: #0d1520;
+      padding: 4px 8px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .cmd-item .cmd-desc {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+    }
+
+    /* === 注意事项 === */
+    .warning-box {
+      background: rgba(255, 152, 0, 0.1);
+      border: 1px solid rgba(255, 152, 0, 0.3);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .warning-box::before {
+      content: "!!";
+      font-weight: 700;
+      color: #FFA726;
+      margin-right: 8px;
+    }
+
+    .info-box {
+      background: rgba(33, 150, 243, 0.1);
+      border: 1px solid rgba(33, 150, 243, 0.3);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    /* === 状态徽章 === */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .badge-ok { background: rgba(76,175,80,0.2); color: #66BB6A; }
+    .badge-warn { background: rgba(255,193,7,0.2); color: #FFD54F; }
+    .badge-err { background: rgba(244,67,54,0.2); color: #EF5350; }
+    .badge-info { background: rgba(33,150,243,0.2); color: #64B5F6; }
+
+    /* === 踩坑清单 === */
+    .pitfall-list {
+      list-style: none;
+    }
+
+    .pitfall-list li {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .pitfall-list li:last-child { border-bottom: none; }
+
+    .pitfall-list .pf-title {
+      font-weight: 600;
+      color: #ffab40;
+      margin-bottom: 4px;
+    }
+
+    .pitfall-list .pf-cause { color: var(--text-muted); }
+
+    .pitfall-list .pf-fix {
+      color: #81c784;
+      margin-top: 2px;
+    }
+
+    /* === 响应式 === */
+    @media (max-width: 900px) {
+      .dashboard-body {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: static;
+      }
+      .nav-list {
+        display: flex;
+        overflow-x: auto;
+      }
+      .nav-list li {
+        white-space: nowrap;
+        border-left: none;
+        border-bottom: 3px solid transparent;
+      }
+      .nav-list li.active {
+        border-left: none;
+        border-bottom-color: var(--accent);
+      }
+      .nav-list li + li { border-top: none; }
+      .channel-grid { grid-template-columns: 1fr; }
+      .cmd-item { grid-template-columns: 1fr; }
+      .pipeline { flex-wrap: wrap; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="dashboard">
+  <!-- 标题 -->
+  <div class="header">
+    <h1>OpenClaw 项目可视化指南</h1>
+    <div class="subtitle">AI Agent 网关 + API Key 自动化管线 + 社区监控 | 快速入手开发与维护</div>
+  </div>
+
+  <div class="dashboard-body">
+    <!-- 侧边栏导航 -->
+    <div class="sidebar">
+      <ul class="nav-list" id="navList">
+        <li class="active" onclick="showSection('overview')" data-section="overview">
+          <span class="nav-icon">&#9670;</span> 全局总览
+        </li>
+        <li onclick="showSection('architecture')" data-section="architecture">
+          <span class="nav-icon">&#9635;</span> 系统架构
+        </li>
+        <li onclick="showSection('pipeline')" data-section="pipeline">
+          <span class="nav-icon">&#10148;</span> Key 管线
+        </li>
+        <li onclick="showSection('channels')" data-section="channels">
+          <span class="nav-icon">&#9993;</span> 消息通道
+        </li>
+        <li onclick="showSection('structure')" data-section="structure">
+          <span class="nav-icon">&#128193;</span> 项目结构
+        </li>
+        <li onclick="showSection('config')" data-section="config">
+          <span class="nav-icon">&#9881;</span> 配置参考
+        </li>
+        <li onclick="showSection('ops')" data-section="ops">
+          <span class="nav-icon">&#9654;</span> 运维命令
+        </li>
+        <li onclick="showSection('pitfalls')" data-section="pitfalls">
+          <span class="nav-icon">&#9888;</span> 踩坑指南
+        </li>
+      </ul>
+    </div>
+
+    <!-- 主区域 -->
+    <div class="main-area">
+
+      <!-- ============ 1. 全局总览 ============ -->
+      <div class="section active" id="section-overview">
+        <div class="card">
+          <h2>&#9670; 项目定位</h2>
+          <p style="line-height:1.8; font-size:14px;">
+            <strong>OpenClaw</strong> 是一个开源 AI Agent 网关（MIT 协议，TypeScript），
+            支持多渠道消息（Telegram / WhatsApp / Slack / Discord）、多模型路由、技能系统、定时任务。
+          </p>
+          <p style="line-height:1.8; font-size:14px; margin-top:10px;">
+            本仓库 <code>claw</code> 围绕 OpenClaw 构建了一套<strong>自动化 API Key 供给链路</strong>：
+            从 LinuxDo 社区自动发现公益站 &rarr; OAuth 注册登录 &rarr; 同步 Key &amp; 配额 &rarr; 挑选最优 Key 写入网关配置。
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>&#127919; 三大子系统</h2>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:8px;">
+            <div style="background:#162a3e;border-radius:10px;padding:16px;border-left:4px solid var(--gateway);">
+              <div style="font-size:22px; margin-bottom:6px;">&#9729;</div>
+              <div style="font-weight:600;color:var(--gateway);margin-bottom:6px;">OpenClaw 网关</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.6;">
+                Docker 部署 &middot; Telegram Bot 交互<br>
+                多模型路由（Claude / GPT）<br>
+                技能系统 &middot; 定时任务
+              </div>
+            </div>
+            <div style="background:#1a2e20;border-radius:10px;padding:16px;border-left:4px solid var(--orchestrator);">
+              <div style="font-size:22px; margin-bottom:6px;">&#128273;</div>
+              <div style="font-weight:600;color:var(--orchestrator);margin-bottom:6px;">Key Orchestrator</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.6;">
+                API Key 自动化管线<br>
+                发现 &rarr; 入库 &rarr; 登录 &rarr; 同步 &rarr; 导出<br>
+                加密存储 &middot; 每日循环
+              </div>
+            </div>
+            <div style="background:#2a2215;border-radius:10px;padding:16px;border-left:4px solid var(--monitor);">
+              <div style="font-size:22px; margin-bottom:6px;">&#128225;</div>
+              <div style="font-weight:600;color:var(--monitor);margin-bottom:6px;">LinuxDo 监控</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.6;">
+                RSS 监控福利帖<br>
+                双层关键词过滤<br>
+                Telegram 自动推送
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>&#128736; 技术栈速览</h2>
+          <table class="config-table">
+            <tr><th>组件</th><th>技术</th><th>备注</th></tr>
+            <tr><td>OpenClaw 网关</td><td>TypeScript / Docker</td><td>源码在 <code>~/openclaw</code></td></tr>
+            <tr><td>Key Orchestrator</td><td>Node.js ESM (<code>.mjs</code>)</td><td>本仓库 <code>key-orchestrator/</code></td></tr>
+            <tr><td>LinuxDo 监控</td><td>Node.js / Docker</td><td>独立仓库</td></tr>
+            <tr><td>运维脚本</td><td>PowerShell</td><td><code>scripts/*.ps1</code></td></tr>
+            <tr><td>密钥存储</td><td>AES 加密 JSON</td><td><code>KEYHUB_MASTER_KEY</code></td></tr>
+            <tr><td>定时任务</td><td>Windows Scheduled Tasks</td><td>PowerShell 安装脚本</td></tr>
+            <tr><td>参考实现</td><td>Go + React (new-api)</td><td><code>_refs/new-api/</code></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- ============ 2. 系统架构 ============ -->
+      <div class="section" id="section-architecture">
+        <div class="card">
+          <h2>&#9635; 系统架构</h2>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">点击任意组件查看详细说明，悬停高亮关联关系</p>
+          <div class="arch-container">
+            <svg viewBox="0 0 880 520" xmlns="http://www.w3.org/2000/svg" id="archSvg">
+              <!-- 背景区域 -->
+              <rect x="10" y="10" width="860" height="500" rx="12" fill="#0d1520" stroke="#263545"/>
+
+              <!-- 区域标签 -->
+              <text x="30" y="40" fill="#546e7a" font-size="11" font-weight="600">LOCAL HOST (Windows 11 + WSL2)</text>
+              <rect x="540" y="55" width="310" height="200" rx="8" fill="none" stroke="#263545" stroke-dasharray="6"/>
+              <text x="555" y="75" fill="#546e7a" font-size="10">EXTERNAL SERVICES</text>
+
+              <!-- 用户 -->
+              <g class="arch-node" data-node="user" onclick="showArchDetail('user')">
+                <ellipse cx="80" cy="120" rx="50" ry="28" fill="#1a2a3a" stroke="#78909C" stroke-width="2"/>
+                <text x="80" y="116" text-anchor="middle" fill="#b0bec5" font-size="18">&#128100;</text>
+                <text x="80" y="134" text-anchor="middle" fill="#b0bec5" font-size="11">用户</text>
+              </g>
+
+              <!-- Telegram -->
+              <g class="arch-node" data-node="telegram" onclick="showArchDetail('telegram')">
+                <rect x="195" y="65" width="120" height="50" rx="8" fill="#1a3040" stroke="var(--telegram)" stroke-width="2"/>
+                <text x="255" y="88" text-anchor="middle" fill="var(--telegram)" font-size="12" font-weight="600">&#9993; Telegram</text>
+                <text x="255" y="103" text-anchor="middle" fill="#78909C" font-size="9">@lingyang4_bot</text>
+              </g>
+
+              <!-- OpenClaw Gateway -->
+              <g class="arch-node" data-node="gateway" onclick="showArchDetail('gateway')">
+                <rect x="180" y="160" width="150" height="70" rx="10" fill="#162a3e" stroke="var(--gateway)" stroke-width="2"/>
+                <text x="255" y="188" text-anchor="middle" fill="var(--gateway)" font-size="13" font-weight="700">&#9729; OpenClaw</text>
+                <text x="255" y="206" text-anchor="middle" fill="var(--gateway)" font-size="13" font-weight="700">Gateway</text>
+                <text x="255" y="222" text-anchor="middle" fill="#78909C" font-size="9">:18789 / :18790</text>
+              </g>
+
+              <!-- Feishu -->
+              <g class="arch-node" data-node="feishu" onclick="showArchDetail('feishu')">
+                <rect x="195" y="280" width="120" height="50" rx="8" fill="#1a1a3a" stroke="var(--feishu)" stroke-width="2"/>
+                <text x="255" y="303" text-anchor="middle" fill="var(--feishu)" font-size="12" font-weight="600">&#128172; 飞书</text>
+                <text x="255" y="318" text-anchor="middle" fill="#78909C" font-size="9">运维通知</text>
+              </g>
+
+              <!-- Key Orchestrator -->
+              <g class="arch-node" data-node="orchestrator" onclick="showArchDetail('orchestrator')">
+                <rect x="370" y="280" width="140" height="70" rx="10" fill="#1a2e20" stroke="var(--orchestrator)" stroke-width="2"/>
+                <text x="440" y="308" text-anchor="middle" fill="var(--orchestrator)" font-size="13" font-weight="700">&#128273; Key</text>
+                <text x="440" y="326" text-anchor="middle" fill="var(--orchestrator)" font-size="13" font-weight="700">Orchestrator</text>
+                <text x="440" y="343" text-anchor="middle" fill="#78909C" font-size="9">API Key 管线</text>
+              </g>
+
+              <!-- Encrypted Store -->
+              <g class="arch-node" data-node="store" onclick="showArchDetail('store')">
+                <rect x="375" y="395" width="130" height="45" rx="8" fill="#2a1a2a" stroke="var(--database)" stroke-width="2"/>
+                <text x="440" y="418" text-anchor="middle" fill="var(--database)" font-size="11" font-weight="600">&#128274; 加密密钥仓库</text>
+                <text x="440" y="432" text-anchor="middle" fill="#78909C" font-size="9">data/secrets.enc</text>
+              </g>
+
+              <!-- LinuxDo Monitor -->
+              <g class="arch-node" data-node="monitor" onclick="showArchDetail('monitor')">
+                <rect x="370" y="160" width="140" height="55" rx="10" fill="#2a2215" stroke="var(--monitor)" stroke-width="2"/>
+                <text x="440" y="185" text-anchor="middle" fill="var(--monitor)" font-size="12" font-weight="600">&#128225; LinuxDo</text>
+                <text x="440" y="201" text-anchor="middle" fill="var(--monitor)" font-size="12" font-weight="600">监控</text>
+              </g>
+
+              <!-- new-api Sites -->
+              <g class="arch-node" data-node="newapi" onclick="showArchDetail('newapi')">
+                <rect x="565" y="90" width="130" height="55" rx="8" fill="#2a1515" stroke="var(--newapi)" stroke-width="2"/>
+                <text x="630" y="115" text-anchor="middle" fill="var(--newapi)" font-size="12" font-weight="600">&#127760; new-api 站点</text>
+                <text x="630" y="132" text-anchor="middle" fill="#78909C" font-size="9">公益站 / 第三方</text>
+              </g>
+
+              <!-- LLM Providers -->
+              <g class="arch-node" data-node="llm" onclick="showArchDetail('llm')">
+                <rect x="565" y="175" width="130" height="55" rx="8" fill="#1a2a1a" stroke="#66BB6A" stroke-width="2"/>
+                <text x="630" y="198" text-anchor="middle" fill="#66BB6A" font-size="12" font-weight="600">&#129302; LLM 提供商</text>
+                <text x="630" y="215" text-anchor="middle" fill="#78909C" font-size="9">Claude / GPT / ...</text>
+              </g>
+
+              <!-- LinuxDo Forum -->
+              <g class="arch-node" data-node="linuxdo" onclick="showArchDetail('linuxdo')">
+                <rect x="725" y="90" width="120" height="55" rx="8" fill="#1a2535" stroke="#78909C" stroke-width="2"/>
+                <text x="785" y="115" text-anchor="middle" fill="#b0bec5" font-size="12" font-weight="600">&#128196; LinuxDo</text>
+                <text x="785" y="132" text-anchor="middle" fill="#78909C" font-size="9">RSS / OAuth</text>
+              </g>
+
+              <!-- Config Files -->
+              <g class="arch-node" data-node="config" onclick="showArchDetail('config')">
+                <rect x="60" y="280" width="110" height="55" rx="8" fill="#1a2535" stroke="#78909C" stroke-width="2"/>
+                <text x="115" y="303" text-anchor="middle" fill="#b0bec5" font-size="11" font-weight="600">&#128196; 配置文件</text>
+                <text x="115" y="320" text-anchor="middle" fill="#78909C" font-size="9">openclaw.json</text>
+                <text x="115" y="331" text-anchor="middle" fill="#78909C" font-size="9">sites.json</text>
+              </g>
+
+              <!-- Windows Task Scheduler -->
+              <g class="arch-node" data-node="scheduler" onclick="showArchDetail('scheduler')">
+                <rect x="60" y="390" width="120" height="45" rx="8" fill="#1a2535" stroke="#78909C" stroke-width="2"/>
+                <text x="120" y="413" text-anchor="middle" fill="#b0bec5" font-size="11" font-weight="600">&#9200; 定时任务</text>
+                <text x="120" y="427" text-anchor="middle" fill="#78909C" font-size="9">Windows Scheduler</text>
+              </g>
+
+              <!-- 连线 -->
+              <!-- 用户 <-> Telegram -->
+              <line x1="130" y1="112" x2="195" y2="95" stroke="#26C6DA" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowTeal)"/>
+              <line x1="195" y1="102" x2="130" y2="120" stroke="#26C6DA" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowTeal)"/>
+
+              <!-- Telegram <-> Gateway -->
+              <line x1="255" y1="115" x2="255" y2="160" stroke="#26C6DA" stroke-width="1.5" marker-end="url(#arrowTeal)"/>
+
+              <!-- Gateway -> Feishu -->
+              <line x1="245" y1="230" x2="245" y2="280" stroke="var(--feishu)" stroke-width="1.5" marker-end="url(#arrowIndigo)"/>
+
+              <!-- Gateway -> LLM -->
+              <line x1="330" y1="190" x2="565" y2="200" stroke="#66BB6A" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+              <!-- Monitor -> LinuxDo -->
+              <line x1="510" y1="180" x2="725" y2="115" stroke="#FFA726" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowOrange)"/>
+
+              <!-- Monitor -> Telegram (push) -->
+              <line x1="400" y1="160" x2="305" y2="108" stroke="#FFA726" stroke-width="1.5" marker-end="url(#arrowOrange)"/>
+
+              <!-- Orchestrator -> new-api Sites -->
+              <line x1="510" y1="300" x2="620" y2="145" stroke="var(--orchestrator)" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+
+              <!-- Orchestrator -> LinuxDo (discover) -->
+              <line x1="500" y1="285" x2="750" y2="145" stroke="var(--orchestrator)" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowGreen)"/>
+
+              <!-- Orchestrator -> Store -->
+              <line x1="440" y1="350" x2="440" y2="395" stroke="var(--database)" stroke-width="1.5" marker-end="url(#arrowPurple)"/>
+
+              <!-- Orchestrator -> Config -->
+              <line x1="370" y1="320" x2="170" y2="310" stroke="#78909C" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+
+              <!-- Scheduler -> Orchestrator -->
+              <line x1="180" y1="410" x2="375" y2="340" stroke="#78909C" stroke-width="1.5" marker-end="url(#arrowGray)"/>
+
+              <!-- Scheduler -> Gateway (restart) -->
+              <line x1="150" y1="390" x2="220" y2="230" stroke="#78909C" stroke-width="1" stroke-dasharray="3" marker-end="url(#arrowGray)"/>
+
+              <!-- 标注 -->
+              <text x="140" y="85" fill="#546e7a" font-size="9">双向交互</text>
+              <text x="218" y="148" fill="#546e7a" font-size="9">Bot 通道</text>
+              <text x="218" y="260" fill="#546e7a" font-size="9">通知推送</text>
+              <text x="420" y="155" fill="#546e7a" font-size="9">push</text>
+              <text x="400" y="275" fill="#546e7a" font-size="9">API 调用</text>
+              <text x="650" y="270" fill="#546e7a" font-size="9">discover</text>
+              <text x="445" y="382" fill="#546e7a" font-size="9">读写密钥</text>
+              <text x="250" y="312" fill="#546e7a" font-size="9">export</text>
+
+              <!-- 箭头定义 -->
+              <defs>
+                <marker id="arrowTeal" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#26C6DA"/></marker>
+                <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#66BB6A"/></marker>
+                <marker id="arrowOrange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#FFA726"/></marker>
+                <marker id="arrowPurple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#AB47BC"/></marker>
+                <marker id="arrowIndigo" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#5C6BC0"/></marker>
+                <marker id="arrowGray" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#78909C"/></marker>
+              </defs>
+            </svg>
+          </div>
+
+          <div class="tooltip-panel" id="archTooltip">
+            <div class="tp-title">&#128161; 点击架构图中的任意组件</div>
+            <div>查看组件的详细说明、关键配置路径和相关命令。</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 3. Key 管线 ============ -->
+      <div class="section" id="section-pipeline">
+        <div class="card">
+          <h2>&#10148; Key Orchestrator 管线</h2>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:8px;">
+            点击各步骤查看详情 | 使用底部控制栏或键盘 <code>&larr;</code> <code>&rarr;</code> <code>Space</code> 切换
+          </p>
+
+          <div class="pipeline" id="pipelineViz">
+            <!-- 动态生成 -->
+          </div>
+
+          <div class="controls">
+            <button class="btn" id="prevBtn" onclick="prevStep()">&#9664; 上一步</button>
+            <button class="btn" id="playBtn" onclick="togglePlay()">&#9654; 播放</button>
+            <button class="btn" id="nextBtn" onclick="nextStep()">下一步 &#9654;</button>
+            <span id="stepIndicator">步骤 1 / 6</span>
+            <input type="range" id="progressBar" min="0" max="5" value="0" oninput="goToStep(parseInt(this.value))">
+            <select onchange="setSpeed(this.value)" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;">
+              <option value="3000">慢速</option>
+              <option value="1800" selected>正常</option>
+              <option value="800">快速</option>
+            </select>
+            <button class="btn btn-outline" onclick="goToStep(0)">&#8634; 重置</button>
+          </div>
+
+          <div class="pipe-detail" id="pipeDetail">
+            <!-- 动态填充 -->
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>&#128260; 一键全流程</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">
+            上述 6 步可以用一条命令串联执行：
+          </p>
+          <div style="background:#0d1520;border:1px solid #2a3a4a;border-radius:8px;padding:14px 18px;font-family:Consolas,monospace;font-size:13px;color:#80d8ff;margin-bottom:12px;">
+npm run cycle:stable -- --openclaw-config "C:\Users\KSG\.openclaw\openclaw.json"</div>
+          <p style="font-size:13px;color:var(--text-muted);line-height:1.7;">
+            <code>cycle:stable</code> 封装了 sync + export + 自动重试 + 锁保护 + 飞书报告。<br>
+            通过 Windows 计划任务每日自动执行：
+          </p>
+          <div style="background:#0d1520;border:1px solid #2a3a4a;border-radius:8px;padding:14px 18px;font-family:Consolas,monospace;font-size:13px;color:#80d8ff;">
+powershell -File .\scripts\install-daily-task.ps1 -RunAt "09:10"</div>
+        </div>
+      </div>
+
+      <!-- ============ 4. 消息通道 ============ -->
+      <div class="section" id="section-channels">
+        <div class="card">
+          <h2>&#9993; 消息通道</h2>
+          <div class="channel-grid">
+            <!-- Telegram -->
+            <div class="channel-card" style="background:#0d1f2f;">
+              <h3><span class="ch-icon">&#9993;</span> <span style="color:var(--telegram);">Telegram</span>
+                <span class="badge badge-ok">双向</span>
+              </h3>
+              <div style="font-size:13px;color:var(--text-muted);line-height:1.7;margin-bottom:10px;">
+                Bot: <code>@lingyang4_bot</code> | Chat ID: <code>1156180724</code>
+              </div>
+              <div class="ch-flow">
+                <span style="color:var(--telegram);">用户</span>
+                <span class="arrow">&rarr;</span>
+                <span>Telegram DM</span>
+                <span class="arrow">&rarr;</span>
+                <span style="color:var(--gateway);">OpenClaw 网关</span>
+                <span class="arrow">&rarr;</span>
+                <span>Agent 执行</span>
+              </div>
+              <div class="ch-flow">
+                <span style="color:var(--monitor);">LinuxDo 监控</span>
+                <span class="arrow">&rarr;</span>
+                <span>Telegram API</span>
+                <span class="arrow">&rarr;</span>
+                <span style="color:var(--telegram);">用户推送</span>
+              </div>
+              <h3 style="font-size:13px;">功能</h3>
+              <ul style="font-size:12px;color:var(--text-muted);line-height:1.8;padding-left:18px;">
+                <li>用户通过 DM 下达指令（如"新增站点 xxx"）</li>
+                <li>Agent 在宿主机执行命令并回复结果</li>
+                <li>LinuxDo 监控自动推送福利帖</li>
+                <li>语音消息自动 STT 转文字（硅基流动）</li>
+              </ul>
+            </div>
+
+            <!-- Feishu -->
+            <div class="channel-card" style="background:#0d0d2a;">
+              <h3><span class="ch-icon">&#128172;</span> <span style="color:var(--feishu);">飞书 (Feishu)</span>
+                <span class="badge badge-info">单向推送</span>
+              </h3>
+              <div style="font-size:13px;color:var(--text-muted);line-height:1.7;margin-bottom:10px;">
+                账户: <code>main</code> | 目标: <code>ou_7325bf...c4f</code>
+              </div>
+              <div class="ch-flow">
+                <span style="color:var(--orchestrator);">Key 管线完成</span>
+                <span class="arrow">&rarr;</span>
+                <span>OpenClaw CLI</span>
+                <span class="arrow">&rarr;</span>
+                <span style="color:var(--feishu);">飞书消息</span>
+              </div>
+              <div class="ch-flow">
+                <span style="color:var(--flow-discover);">发现周期完成</span>
+                <span class="arrow">&rarr;</span>
+                <span>OpenClaw CLI</span>
+                <span class="arrow">&rarr;</span>
+                <span style="color:var(--feishu);">飞书消息</span>
+              </div>
+              <h3 style="font-size:13px;">通知内容</h3>
+              <ul style="font-size:12px;color:var(--text-muted);line-height:1.8;padding-left:18px;">
+                <li>每日 Key 同步报告（站点数 / 同步数 / 应用数）</li>
+                <li>LinuxDo 站点发现报告（新站点 / 入库 / 注册结果）</li>
+                <li>错误和异常通知</li>
+              </ul>
+              <h3 style="font-size:13px;">调用方式</h3>
+              <div style="background:#0d1520;border:1px solid #2a3a4a;border-radius:6px;padding:10px 14px;font-family:Consolas,monospace;font-size:11px;color:#80d8ff;margin-top:6px;">
+node $OpenClawCli message send \<br>
+&nbsp;&nbsp;--channel feishu \<br>
+&nbsp;&nbsp;--account main \<br>
+&nbsp;&nbsp;--target $FeishuTarget \<br>
+&nbsp;&nbsp;--message "报告内容"</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>&#128268; 通道数据流总览</h2>
+          <svg viewBox="0 0 800 200" style="width:100%;" xmlns="http://www.w3.org/2000/svg">
+            <rect x="0" y="0" width="800" height="200" fill="#0d1520" rx="10"/>
+
+            <!-- User -->
+            <rect x="20" y="75" width="80" height="50" rx="8" fill="#1a2a3a" stroke="#78909C" stroke-width="1.5"/>
+            <text x="60" y="98" text-anchor="middle" fill="#b0bec5" font-size="16">&#128100;</text>
+            <text x="60" y="115" text-anchor="middle" fill="#b0bec5" font-size="10">用户</text>
+
+            <!-- Telegram -->
+            <rect x="160" y="30" width="110" height="40" rx="6" fill="#1a3040" stroke="var(--telegram)" stroke-width="1.5"/>
+            <text x="215" y="55" text-anchor="middle" fill="var(--telegram)" font-size="11">Telegram Bot</text>
+
+            <!-- Gateway -->
+            <rect x="330" y="65" width="130" height="55" rx="8" fill="#162a3e" stroke="var(--gateway)" stroke-width="2"/>
+            <text x="395" y="90" text-anchor="middle" fill="var(--gateway)" font-size="12" font-weight="600">OpenClaw 网关</text>
+            <text x="395" y="108" text-anchor="middle" fill="#78909C" font-size="9">路由 + Agent</text>
+
+            <!-- Feishu -->
+            <rect x="160" y="130" width="110" height="40" rx="6" fill="#1a1a3a" stroke="var(--feishu)" stroke-width="1.5"/>
+            <text x="215" y="155" text-anchor="middle" fill="var(--feishu)" font-size="11">飞书</text>
+
+            <!-- Key Orch -->
+            <rect x="540" y="30" width="110" height="40" rx="6" fill="#1a2e20" stroke="var(--orchestrator)" stroke-width="1.5"/>
+            <text x="595" y="55" text-anchor="middle" fill="var(--orchestrator)" font-size="11">Key Orchestrator</text>
+
+            <!-- Monitor -->
+            <rect x="540" y="120" width="110" height="40" rx="6" fill="#2a2215" stroke="var(--monitor)" stroke-width="1.5"/>
+            <text x="595" y="145" text-anchor="middle" fill="var(--monitor)" font-size="11">LinuxDo 监控</text>
+
+            <!-- LLM -->
+            <rect x="710" y="65" width="70" height="55" rx="8" fill="#1a2a1a" stroke="#66BB6A" stroke-width="1.5"/>
+            <text x="745" y="90" text-anchor="middle" fill="#66BB6A" font-size="11">LLM</text>
+            <text x="745" y="106" text-anchor="middle" fill="#78909C" font-size="9">API</text>
+
+            <!-- Arrows -->
+            <line x1="100" y1="85" x2="160" y2="55" stroke="#26C6DA" stroke-width="1.2" marker-end="url(#arrowTeal)"/>
+            <line x1="160" y1="62" x2="100" y2="95" stroke="#26C6DA" stroke-width="1.2" marker-end="url(#arrowTeal)"/>
+            <line x1="270" y1="50" x2="330" y2="80" stroke="#26C6DA" stroke-width="1.2" marker-end="url(#arrowTeal)"/>
+
+            <line x1="380" y1="120" x2="270" y2="145" stroke="var(--feishu)" stroke-width="1.2" marker-end="url(#arrowIndigo)"/>
+
+            <line x1="460" y1="85" x2="540" y2="55" stroke="var(--orchestrator)" stroke-width="1.2" stroke-dasharray="4" marker-end="url(#arrowGreen)"/>
+            <line x1="460" y1="100" x2="540" y2="135" stroke="var(--monitor)" stroke-width="1.2" stroke-dasharray="4" marker-end="url(#arrowOrange)"/>
+
+            <line x1="650" y1="140" x2="270" y2="48" stroke="var(--monitor)" stroke-width="1" stroke-dasharray="3" marker-end="url(#arrowOrange)"/>
+            <text x="420" y="28" fill="#546e7a" font-size="8">push 通知</text>
+
+            <line x1="460" y1="88" x2="710" y2="88" stroke="#66BB6A" stroke-width="1.2" marker-end="url(#arrowGreen)"/>
+
+            <text x="120" y="70" fill="#546e7a" font-size="8">DM</text>
+            <text x="310" y="68" fill="#546e7a" font-size="8">Bot</text>
+            <text x="310" y="140" fill="#546e7a" font-size="8">CLI</text>
+            <text x="570" y="90" fill="#546e7a" font-size="8">模型请求</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- ============ 5. 项目结构 ============ -->
+      <div class="section" id="section-structure">
+        <div class="card">
+          <h2>&#128193; 仓库目录结构</h2>
+          <div class="file-tree">
+<span class="ft-dir">claw/</span>                                    <span class="ft-comment"># 本仓库根目录</span>
+├── <span class="ft-dir">key-orchestrator/</span>                    <span class="ft-comment"># Key 自动化管线（核心开发模块）</span>
+│   ├── <span class="ft-important">package.json</span>                       <span class="ft-comment"># npm scripts 入口</span>
+│   ├── <span class="ft-important">README.md</span>                          <span class="ft-comment"># 模块文档</span>
+│   ├── <span class="ft-dir">config/</span>                          <span class="ft-comment"># 配置文件（不提交真实值）</span>
+│   │   ├── <span class="ft-file">sites.json</span>                     <span class="ft-comment"># 站点列表 + 适配器配置</span>
+│   │   ├── <span class="ft-file">provider-map.json</span>              <span class="ft-comment"># 站点 &rarr; OpenClaw provider 映射</span>
+│   │   ├── <span class="ft-file">sites.example.json</span>             <span class="ft-comment"># 示例（可提交）</span>
+│   │   └── <span class="ft-file">provider-map.example.json</span>      <span class="ft-comment"># 示例（可提交）</span>
+│   ├── <span class="ft-dir">src/</span>                             <span class="ft-comment"># 源代码（ESM .mjs）</span>
+│   │   ├── <span class="ft-file">auto-cycle.mjs</span>                 <span class="ft-comment"># 自动循环（sync + export）</span>
+│   │   ├── <span class="ft-important">stable-cycle.mjs</span>               <span class="ft-comment"># 稳定每日循环（重试+锁+报告）</span>
+│   │   ├── <span class="ft-file">sync-keys.mjs</span>                  <span class="ft-comment"># 同步各站 Key &amp; 配额</span>
+│   │   ├── <span class="ft-file">export-openclaw-json.mjs</span>       <span class="ft-comment"># 导出到 openclaw.json</span>
+│   │   ├── <span class="ft-file">export-openclaw-env.mjs</span>        <span class="ft-comment"># 导出为 .env</span>
+│   │   ├── <span class="ft-file">import-secret.mjs</span>              <span class="ft-comment"># 导入密钥到加密仓库</span>
+│   │   ├── <span class="ft-file">onboard-newapi-site.mjs</span>        <span class="ft-comment"># new-api 站点注册</span>
+│   │   ├── <span class="ft-important">onboard-linuxdo-oauth-sites.mjs</span><span class="ft-comment"># LinuxDo OAuth 批量登录</span>
+│   │   ├── <span class="ft-important">discover-linuxdo-public-sites.mjs</span><span class="ft-comment"># RSS 发现公益站</span>
+│   │   ├── <span class="ft-file">upsert-sites-from-discovery.mjs</span><span class="ft-comment"># 发现结果入库</span>
+│   │   ├── <span class="ft-file">load-adapter.mjs</span>               <span class="ft-comment"># 适配器加载器</span>
+│   │   ├── <span class="ft-dir">adapters/</span>                      <span class="ft-comment"># 站点适配器</span>
+│   │   │   ├── <span class="ft-file">mock.mjs</span>                   <span class="ft-comment"># 测试用</span>
+│   │   │   ├── <span class="ft-file">http.mjs</span>                   <span class="ft-comment"># 通用 HTTP</span>
+│   │   │   └── <span class="ft-file">new-api.mjs</span>                <span class="ft-comment"># new-api 站点专用</span>
+│   │   └── <span class="ft-dir">lib/</span>                           <span class="ft-comment"># 公共库</span>
+│   │       ├── <span class="ft-file">store.mjs</span>                  <span class="ft-comment"># 加密密钥存储</span>
+│   │       ├── <span class="ft-file">http-client.mjs</span>            <span class="ft-comment"># HTTP 请求封装</span>
+│   │       ├── <span class="ft-file">json-file.mjs</span>              <span class="ft-comment"># JSON 文件读写</span>
+│   │       ├── <span class="ft-file">json-path.mjs</span>              <span class="ft-comment"># JSON 路径操作</span>
+│   │       ├── <span class="ft-file">args.mjs</span>                   <span class="ft-comment"># 命令行参数解析</span>
+│   │       └── <span class="ft-file">log.mjs</span>                    <span class="ft-comment"># 日志工具</span>
+│   ├── <span class="ft-dir">scripts/</span>                         <span class="ft-comment"># PowerShell 运维脚本</span>
+│   │   ├── <span class="ft-important">run-stable-cycle.ps1</span>           <span class="ft-comment"># 稳定循环入口 + 飞书通知</span>
+│   │   ├── <span class="ft-file">run-linuxdo-discovery-cycle.ps1</span><span class="ft-comment"># 发现循环 + 飞书通知</span>
+│   │   ├── <span class="ft-file">install-daily-task.ps1</span>         <span class="ft-comment"># 安装 Windows 计划任务</span>
+│   │   └── <span class="ft-file">install-linuxdo-daily-task.ps1</span> <span class="ft-comment"># 安装发现计划任务</span>
+│   └── <span class="ft-dir">data/</span>                            <span class="ft-comment"># 运行时数据（不提交）</span>
+│       ├── <span class="ft-file">secrets.enc</span>                    <span class="ft-comment"># 加密密钥仓库</span>
+│       ├── <span class="ft-file">stable-cycle-report.json</span>       <span class="ft-comment"># 最近一次报告</span>
+│       ├── <span class="ft-dir">stable-cycle-history/</span>          <span class="ft-comment"># 历史报告</span>
+│       ├── <span class="ft-dir">logs/</span>                          <span class="ft-comment"># 日志文件</span>
+│       └── <span class="ft-file">linuxdo-public-sites.json</span>     <span class="ft-comment"># 发现的站点</span>
+├── <span class="ft-dir">_refs/new-api/</span>                       <span class="ft-comment"># new-api 参考源码 (Go + React)</span>
+├── <span class="ft-file">OPENCLAW-DOCKER-GUIDE.md</span>             <span class="ft-comment"># Docker 部署运维手册</span>
+├── <span class="ft-file">OPENCLAW-LINUXDO-OAUTH-APIKEY-RUNBOOK.md</span> <span class="ft-comment"># OAuth 登录操作手册</span>
+└── <span class="ft-file">opm.js</span>                               <span class="ft-comment"># 其他脚本</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>&#127968; 宿主机关键路径</h2>
+          <table class="config-table">
+            <tr><th>路径</th><th>用途</th></tr>
+            <tr><td><code>C:\Users\KSG\openclaw\</code></td><td>OpenClaw 网关源码 + docker-compose</td></tr>
+            <tr><td><code>C:\Users\KSG\.openclaw\openclaw.json</code></td><td>网关主配置文件（模型 / 通道 / Agent）</td></tr>
+            <tr><td><code>C:\Users\KSG\.openclaw\workspace\</code></td><td>Agent 工作空间</td></tr>
+            <tr><td><code>D:\workspace\project\claw\</code></td><td>本仓库（Key Orchestrator）</td></tr>
+            <tr><td><code>D:\...\linuxdo-monitor\</code></td><td>LinuxDo 监控（独立 Docker）</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- ============ 6. 配置参考 ============ -->
+      <div class="section" id="section-config">
+        <div class="card">
+          <h2>&#9881; openclaw.json 核心配置</h2>
+          <table class="config-table">
+            <tr><th>配置项</th><th>说明</th><th>当前值</th></tr>
+            <tr>
+              <td><code>gateway.mode</code></td>
+              <td>网关运行模式</td>
+              <td><span class="badge badge-ok">local</span></td>
+            </tr>
+            <tr>
+              <td><code>models.providers.anthropic</code></td>
+              <td>Claude 模型（主模型）</td>
+              <td>baseUrl: <code>anyrouter.top</code> <span class="badge badge-ok">正常</span></td>
+            </tr>
+            <tr>
+              <td><code>models.providers.openai</code></td>
+              <td>GPT 模型（fallback）</td>
+              <td>baseUrl: <code>stephecurry.asia</code> <span class="badge badge-err">CF 1033</span></td>
+            </tr>
+            <tr>
+              <td><code>channels.telegram</code></td>
+              <td>Telegram Bot 通道</td>
+              <td>dmPolicy: open, allowFrom: [*] <span class="badge badge-ok">启用</span></td>
+            </tr>
+            <tr>
+              <td><code>agents.defaults.model</code></td>
+              <td>默认 Agent 模型</td>
+              <td><code>anthropic/claude-opus-4-6</code></td>
+            </tr>
+            <tr>
+              <td><code>tools.media.audio</code></td>
+              <td>语音识别 (STT)</td>
+              <td>硅基流动 SenseVoiceSmall <span class="badge badge-ok">启用</span></td>
+            </tr>
+            <tr>
+              <td><code>cron.enabled</code></td>
+              <td>定时任务</td>
+              <td>maxConcurrentRuns: 5 <span class="badge badge-ok">启用</span></td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>&#128273; Key Orchestrator 配置</h2>
+          <h3>config/sites.json</h3>
+          <table class="config-table">
+            <tr><th>字段</th><th>说明</th><th>示例</th></tr>
+            <tr><td><code>id</code></td><td>站点唯一标识</td><td><code>"stephecurry"</code></td></tr>
+            <tr><td><code>type</code></td><td>适配器类型</td><td><span class="tag tag-adapter">mock</span> <span class="tag tag-adapter">http</span> <span class="tag tag-adapter">new-api</span></td></tr>
+            <tr><td><code>enabled</code></td><td>是否启用</td><td><code>true</code></td></tr>
+            <tr><td><code>baseUrl</code></td><td>站点 API 基础地址</td><td><code>"https://stephecurry.asia"</code></td></tr>
+            <tr><td><code>auth.tokenSecret</code></td><td>加密仓库中的密钥名</td><td><code>"stephecurry_access_token"</code></td></tr>
+            <tr><td><code>settings</code></td><td>API 端点路径/字段映射</td><td>因适配器而异</td></tr>
+          </table>
+
+          <h3>config/provider-map.json</h3>
+          <table class="config-table">
+            <tr><th>字段</th><th>说明</th><th>示例</th></tr>
+            <tr><td><code>siteId</code></td><td>来源站点</td><td><code>"stephecurry"</code></td></tr>
+            <tr><td><code>provider</code></td><td>映射到 OpenClaw 的 provider</td><td><code>"openai"</code></td></tr>
+            <tr><td><code>strategy</code></td><td>选 Key 策略</td><td><code>"highest_quota"</code> / <code>"latest_seen"</code></td></tr>
+          </table>
+
+          <h3>环境变量</h3>
+          <table class="config-table">
+            <tr><th>变量</th><th>用途</th><th>必需</th></tr>
+            <tr>
+              <td><code>KEYHUB_MASTER_KEY</code></td>
+              <td>加密仓库主密钥</td>
+              <td><span class="badge badge-err">必需</span></td>
+            </tr>
+            <tr>
+              <td><code>OPENCLAW_FEISHU_TARGET</code></td>
+              <td>飞书通知目标 (ou_xxx)</td>
+              <td>可选（有默认值）</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- ============ 7. 运维命令 ============ -->
+      <div class="section" id="section-ops">
+        <div class="card">
+          <h2>&#9654; 运维命令速查</h2>
+
+          <div class="cmd-group">
+            <h3>&#9729; OpenClaw 网关 (Docker)</h3>
+            <div class="cmd-item"><div class="cmd-code">docker compose up -d openclaw-gateway</div><div class="cmd-desc">启动网关</div></div>
+            <div class="cmd-item"><div class="cmd-code">docker compose restart openclaw-gateway</div><div class="cmd-desc">重启网关</div></div>
+            <div class="cmd-item"><div class="cmd-code">docker compose logs openclaw-gateway -f --tail 30</div><div class="cmd-desc">查看实时日志</div></div>
+            <div class="cmd-item"><div class="cmd-code">docker compose exec openclaw-gateway node dist/index.js status --deep</div><div class="cmd-desc">深度状态检查</div></div>
+            <div class="cmd-item"><div class="cmd-code">docker compose exec openclaw-gateway node dist/index.js health</div><div class="cmd-desc">健康检查</div></div>
+          </div>
+
+          <div class="cmd-group">
+            <h3>&#128273; Key Orchestrator</h3>
+            <div class="cmd-item"><div class="cmd-code">npm run import:token -- --name xxx --value "TOKEN"</div><div class="cmd-desc">导入密钥到加密仓库</div></div>
+            <div class="cmd-item"><div class="cmd-code">npm run sync</div><div class="cmd-desc">同步所有站点 Key</div></div>
+            <div class="cmd-item"><div class="cmd-code">npm run export:json -- --map config/provider-map.json --openclaw-config "..."</div><div class="cmd-desc">导出到 openclaw.json</div></div>
+            <div class="cmd-item"><div class="cmd-code">npm run cycle:auto -- --openclaw-config "..."</div><div class="cmd-desc">自动循环 (sync+export)</div></div>
+            <div class="cmd-item"><div class="cmd-code">npm run cycle:stable -- --openclaw-config "..."</div><div class="cmd-desc">稳定循环（推荐）</div></div>
+          </div>
+
+          <div class="cmd-group">
+            <h3>&#127760; LinuxDo 站点发现与注册</h3>
+            <div class="cmd-item"><div class="cmd-code">npm run discover:linuxdo</div><div class="cmd-desc">从 RSS 发现公益站</div></div>
+            <div class="cmd-item"><div class="cmd-code">npm run upsert:linuxdo</div><div class="cmd-desc">发现结果入库</div></div>
+            <div class="cmd-item"><div class="cmd-code">npm run onboard:linuxdo -- --openclaw-cli "..." --browser-profile openclaw</div><div class="cmd-desc">LinuxDo OAuth 批量登录</div></div>
+            <div class="cmd-item"><div class="cmd-code">npm run onboard:newapi -- --site "https://..." --site-id xxx</div><div class="cmd-desc">单站 new-api 注册</div></div>
+          </div>
+
+          <div class="cmd-group">
+            <h3>&#128225; LinuxDo 监控</h3>
+            <div class="cmd-item"><div class="cmd-code">cd linuxdo-monitor && docker compose up -d</div><div class="cmd-desc">启动监控</div></div>
+            <div class="cmd-item"><div class="cmd-code">docker logs -f linuxdo-monitor</div><div class="cmd-desc">查看日志</div></div>
+            <div class="cmd-item"><div class="cmd-code">docker compose up -d --build</div><div class="cmd-desc">修改代码后重新构建</div></div>
+          </div>
+
+          <div class="cmd-group">
+            <h3>&#9200; 定时任务</h3>
+            <div class="cmd-item"><div class="cmd-code">powershell -File .\scripts\install-daily-task.ps1 -RunAt "09:10"</div><div class="cmd-desc">安装 Key 同步计划任务</div></div>
+            <div class="cmd-item"><div class="cmd-code">powershell -File .\scripts\install-linuxdo-daily-task.ps1 -RunAt "08:40"</div><div class="cmd-desc">安装发现计划任务</div></div>
+            <div class="cmd-item"><div class="cmd-code">powershell -File .\scripts\run-stable-cycle.ps1</div><div class="cmd-desc">手动触发稳定循环</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ 8. 踩坑指南 ============ -->
+      <div class="section" id="section-pitfalls">
+        <div class="card">
+          <h2>&#9888; 踩坑指南</h2>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">前人踩过的坑，后人不必重蹈覆辙</p>
+
+          <ul class="pitfall-list">
+            <li>
+              <div class="pf-title">1. 网关启动报 "Missing config"</div>
+              <div class="pf-cause">原因：<code>~/.openclaw/openclaw.json</code> 不存在或缺少 <code>gateway.mode</code></div>
+              <div class="pf-fix">修复：创建配置，至少包含 <code>{"gateway":{"mode":"local"}}</code></div>
+            </li>
+            <li>
+              <div class="pf-title">2. "non-loopback Control UI requires allowedOrigins"</div>
+              <div class="pf-cause">原因：<code>OPENCLAW_GATEWAY_BIND=lan</code> 绑定到 LAN 时需要配置 CORS</div>
+              <div class="pf-fix">修复：添加 <code>controlUi.allowedOrigins</code> + <code>dangerouslyAllowHostHeaderOriginFallback: true</code></div>
+            </li>
+            <li>
+              <div class="pf-title">3. CLI 容器无法连接网关</div>
+              <div class="pf-cause">原因：<code>docker compose run openclaw-cli</code> 连接的是自己容器的 localhost</div>
+              <div class="pf-fix">修复：始终用 <code>docker compose exec openclaw-gateway</code></div>
+            </li>
+            <li>
+              <div class="pf-title">4. Telegram "chat not found"</div>
+              <div class="pf-cause">原因：用户未给 Bot 发送过消息</div>
+              <div class="pf-fix">修复：先在 Telegram 给 Bot 发 <code>/start</code></div>
+            </li>
+            <li>
+              <div class="pf-title">5. Telegram getUpdates 409 冲突</div>
+              <div class="pf-cause">原因：网关在长轮询消费 updates，外部调用冲突</div>
+              <div class="pf-fix">修复：不要同时调 getUpdates；获取 Chat ID 时先禁用 Telegram</div>
+            </li>
+            <li>
+              <div class="pf-title">6. Docker build 拉不到镜像（EOF / DNS 失败）</div>
+              <div class="pf-cause">原因：Docker Hub 需要代理</div>
+              <div class="pf-fix">修复：<code>~/.docker/daemon.json</code> 配置 proxies，Desktop 设 manual 代理 <code>host.docker.internal:7890</code></div>
+            </li>
+            <li>
+              <div class="pf-title">7. LinuxDo RSS 返回 0 篇帖子</div>
+              <div class="pf-cause">原因：Cloudflare 429 限流</div>
+              <div class="pf-fix">修复：增大检查间隔（600s），请求间加 3s 延迟，使用浏览器 UA</div>
+            </li>
+            <li>
+              <div class="pf-title">8. dmPolicy "open" 报错</div>
+              <div class="pf-cause">原因：<code>dmPolicy: "open"</code> 必须配合 <code>allowFrom: ["*"]</code></div>
+              <div class="pf-fix">修复：同时设置 <code>"allowFrom": ["*"]</code></div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h2>&#128274; 安全须知</h2>
+          <div class="warning-box">
+            永远不要提交 <code>data/</code> 目录和真实的 <code>config/sites.json</code>。API Key、密码、Token 只存在加密仓库中。
+          </div>
+          <div class="warning-box">
+            <code>KEYHUB_MASTER_KEY</code> 必须设置为环境变量，不要写入代码或提交到仓库。
+          </div>
+          <div class="info-box">
+            部分站点强制 CAPTCHA/Turnstile/OAuth 手动授权，<code>onboard:linuxdo</code> 会标记为 <code>manual_required</code>，需手动处理后重跑。
+          </div>
+        </div>
+      </div>
+
+    </div><!-- main-area -->
+  </div><!-- dashboard-body -->
+
+  <div style="text-align:center;padding:30px 0 20px;color:#546e7a;font-size:11px;">
+    OpenClaw Project Guide &middot; 自动生成于 2026-03-02 &middot; 键盘操作：侧边栏 &uarr;&darr; | 管线 &larr;&rarr; Space
+  </div>
+</div>
+
+<script>
+// ===================== 导航 =====================
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-list li').forEach(li => li.classList.remove('active'));
+
+  const sec = document.getElementById('section-' + name);
+  if (sec) sec.classList.add('active');
+
+  const nav = document.querySelector(`[data-section="${name}"]`);
+  if (nav) nav.classList.add('active');
+}
+
+// 键盘导航侧边栏
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+  const sections = ['overview','architecture','pipeline','channels','structure','config','ops','pitfalls'];
+  const current = document.querySelector('.nav-list li.active');
+  const idx = current ? sections.indexOf(current.dataset.section) : 0;
+
+  if (e.key === 'ArrowDown' && e.altKey) {
+    e.preventDefault();
+    showSection(sections[Math.min(idx + 1, sections.length - 1)]);
+  } else if (e.key === 'ArrowUp' && e.altKey) {
+    e.preventDefault();
+    showSection(sections[Math.max(idx - 1, 0)]);
+  }
+});
+
+// ===================== 架构图详情 =====================
+const archDetails = {
+  user: {
+    title: '用户',
+    html: '通过 <strong>Telegram DM</strong> 与 OpenClaw 交互，下达指令（如"新增站点""刷新 Key"），Agent 在宿主机执行后回复结果。<br>用户名：<code>@wakuwakuba</code>，Chat ID：<code>1156180724</code>'
+  },
+  telegram: {
+    title: 'Telegram Bot (@lingyang4_bot)',
+    html: 'OpenClaw 网关原生支持的消息通道。<br><strong>双向</strong>：用户可发指令 + 接收推送。<br>配置：<code>channels.telegram</code> in <code>openclaw.json</code><br>注意：<code>dmPolicy: "open"</code> 需配合 <code>allowFrom: ["*"]</code>'
+  },
+  gateway: {
+    title: 'OpenClaw Gateway (Docker)',
+    html: 'AI Agent 网关，核心运行时。端口 <code>18789</code>（网关）/ <code>18790</code>（Bridge）。<br>Docker 镜像：<code>openclaw:local</code>（本地构建）<br>管理命令：<code>docker compose exec openclaw-gateway node dist/index.js ...</code><br>配置文件：<code>C:\\Users\\KSG\\.openclaw\\openclaw.json</code>'
+  },
+  feishu: {
+    title: '飞书通知通道',
+    html: '<strong>单向</strong>推送：Key 管线和发现周期完成后，通过 OpenClaw CLI 发送报告到飞书。<br>调用：<code>node $CLI message send --channel feishu --account main --target ou_xxx</code><br>目标优先级：脚本参数 &gt; 环境变量 <code>OPENCLAW_FEISHU_TARGET</code> &gt; 内置默认值'
+  },
+  orchestrator: {
+    title: 'Key Orchestrator',
+    html: '本仓库的核心模块。自动化 API Key 管线：<br>1. 发现公益站（LinuxDo RSS）<br>2. 入库站点配置<br>3. OAuth 注册/登录<br>4. 同步 Key &amp; 配额<br>5. 挑选最优 Key 导出到 OpenClaw<br>6. 每日稳定循环 + 飞书报告'
+  },
+  store: {
+    title: '加密密钥仓库',
+    html: 'AES 加密的 JSON 文件，存储所有站点的 Token、密码、API Key。<br>路径：<code>data/secrets.enc</code><br>主密钥：环境变量 <code>KEYHUB_MASTER_KEY</code><br>操作：<code>npm run import:token -- --name xxx --value "TOKEN"</code>'
+  },
+  monitor: {
+    title: 'LinuxDo 监控',
+    html: '独立 Docker 容器，每 10 分钟扫描 LinuxDo <code>latest.rss</code> + <code>top.rss</code>。<br>双层关键词过滤（高/中置信度）+ 排除词。<br>命中后自动推送到 Telegram。<br>持久化存储已推送帖子避免重复。'
+  },
+  newapi: {
+    title: 'new-api 站点（第三方公益站）',
+    html: '基于 QuantumNous/new-api 架构的 AI API 中转站。<br>Key Orchestrator 通过 <code>new-api</code> 适配器调用其标准 API：<br>&bull; <code>/api/user/self</code> — 获取用户信息<br>&bull; <code>/api/token/</code> — 获取 API Key 列表<br>参考源码：<code>_refs/new-api/</code>'
+  },
+  llm: {
+    title: 'LLM 提供商',
+    html: 'OpenClaw 网关通过配置的 Provider 调用 LLM API。<br>当前：<br>&bull; <strong>anthropic</strong>：<code>anyrouter.top</code> → Claude Opus 4.6 <span class="badge badge-ok">正常</span><br>&bull; <strong>openai</strong>：<code>stephecurry.asia</code> → GPT <span class="badge badge-err">不可用</span>'
+  },
+  linuxdo: {
+    title: 'LinuxDo 社区',
+    html: 'Linux.do 论坛，提供：<br>&bull; <strong>RSS Feed</strong>：<code>latest.rss</code> + <code>top.rss</code>（用于监控和发现）<br>&bull; <strong>OAuth</strong>：<code>connect.linux.do</code>（用于第三方站点登录）<br>注意：分类 RSS 被 Cloudflare 拦截，只能用全站 RSS'
+  },
+  config: {
+    title: '配置文件',
+    html: '<strong>openclaw.json</strong>：网关主配置（模型 / 通道 / Agent / 定时任务）<br><strong>sites.json</strong>：Key Orchestrator 站点列表<br><strong>provider-map.json</strong>：站点到 OpenClaw Provider 的映射<br><strong>.env</strong>：Docker Compose 环境变量'
+  },
+  scheduler: {
+    title: 'Windows 计划任务',
+    html: '两个每日定时任务：<br>&bull; <code>OpenClaw-KeyOrchestrator-Daily</code> — 09:10 执行 Key 同步循环<br>&bull; <code>OpenClaw-KeyOrchestrator-LinuxDoDaily</code> — 08:40 执行站点发现循环<br>安装：<code>powershell -File .\\scripts\\install-daily-task.ps1</code>'
+  }
+};
+
+function showArchDetail(node) {
+  const d = archDetails[node];
+  if (!d) return;
+  const el = document.getElementById('archTooltip');
+  el.innerHTML = `<div class="tp-title">${d.title}</div><div>${d.html}</div>`;
+
+  // 高亮节点
+  document.querySelectorAll('.arch-node').forEach(n => n.style.opacity = '0.4');
+  const target = document.querySelector(`[data-node="${node}"]`);
+  if (target) target.style.opacity = '1';
+
+  setTimeout(() => {
+    document.querySelectorAll('.arch-node').forEach(n => n.style.opacity = '1');
+  }, 3000);
+}
+
+// ===================== Pipeline 管线 =====================
+const pipelineSteps = [
+  {
+    id: 'discover',
+    icon: '&#128269;',
+    label: '发现站点',
+    color: 'var(--flow-discover)',
+    title: '第 1 步：发现公益站 (discover:linuxdo)',
+    html: `<p>从 LinuxDo 论坛 RSS 自动发现公益站 / 福利站帖子中的外链站点。</p>
+<div class="pd-cmd">npm run discover:linuxdo</div>
+<p><span class="tag tag-output">输出</span> <code>data/linuxdo-public-sites.json</code></p>
+<p style="margin-top:8px;"><strong>原理</strong>：抓取 <code>latest.rss</code> + <code>top.rss</code>，提取帖子中的外部链接，过滤掉已知非 API 站点（如 github.com、t.me 等），保留疑似 new-api 站点。</p>
+<div class="warning-box">LinuxDo 有 Cloudflare 限流，分类 RSS 不可用，只能用全站 RSS（每源最新 30 篇）。</div>`
+  },
+  {
+    id: 'upsert',
+    icon: '&#128229;',
+    label: '入库',
+    color: 'var(--flow-upsert)',
+    title: '第 2 步：站点入库 (upsert:linuxdo)',
+    html: `<p>将发现的站点写入 <code>config/sites.json</code> 和 <code>config/provider-map.json</code>，并识别哪些站点已在密钥仓库中注册过。</p>
+<div class="pd-cmd">npm run upsert:linuxdo</div>
+<p><span class="tag tag-output">输出</span> <code>data/linuxdo-site-upsert-report.json</code></p>
+<p style="margin-top:8px;"><strong>逻辑</strong>：新站点自动生成 siteId，设 type 为 <code>new-api</code>，enabled 为 <code>true</code>。已存在的站点跳过（不覆盖手动配置）。</p>`
+  },
+  {
+    id: 'onboard',
+    icon: '&#128274;',
+    label: 'OAuth 登录',
+    color: 'var(--flow-onboard)',
+    title: '第 3 步：OAuth 登录注册 (onboard:linuxdo)',
+    html: `<p>对未注册的站点，通过 OpenClaw Browser Relay 打开浏览器自动完成 LinuxDo OAuth 登录。成功后写入 <code>&lt;siteId&gt;_access_token</code> 和 <code>&lt;siteId&gt;_user_id</code> 到密钥仓库。</p>
+<div class="pd-cmd">npm run onboard:linuxdo -- --openclaw-cli "C:\\Users\\KSG\\openclaw\\dist\\index.js" --browser-profile openclaw</div>
+<p><span class="tag tag-output">输出</span> <code>data/linuxdo-onboard-report.json</code></p>
+<p style="margin-top:8px;"><span class="tag tag-secret">注意</span> 部分站点有验证码、人工确认或页面结构差异，脚本会标记 <code>manual_required</code>，需手动完成后重跑。</p>
+<p style="margin-top:6px;">也可以手动导入 Token：</p>
+<div class="pd-cmd">npm run import:token -- --name xxx_access_token --value "YOUR_TOKEN"</div>`
+  },
+  {
+    id: 'sync',
+    icon: '&#128260;',
+    label: '同步 Key',
+    color: 'var(--flow-sync)',
+    title: '第 4 步：同步 Key 和配额 (sync)',
+    html: `<p>对每个 <code>enabled</code> 的站点，调用对应适配器拉取 API Key 列表和配额信息。</p>
+<div class="pd-cmd">npm run sync</div>
+<p style="margin-top:8px;"><strong>适配器</strong>：</p>
+<ul style="padding-left:20px;line-height:1.8;">
+  <li><span class="tag tag-adapter">mock</span> — 生成测试数据</li>
+  <li><span class="tag tag-adapter">http</span> — 通用 HTTP 端点</li>
+  <li><span class="tag tag-adapter">new-api</span> — 调用 <code>/api/user/self</code> + <code>/api/token/</code>，自动推断 user_id</li>
+</ul>
+<p style="margin-top:8px;">Key 和配额数据暂存内存，供下一步挑选。</p>`
+  },
+  {
+    id: 'export',
+    icon: '&#128228;',
+    label: '导出配置',
+    color: 'var(--flow-export)',
+    title: '第 5 步：导出到 OpenClaw (export:json)',
+    html: `<p>根据 <code>provider-map.json</code> 的映射和选 Key 策略（<code>highest_quota</code> / <code>latest_seen</code>），从同步结果中挑选最优 Key，写入 <code>openclaw.json</code> 的 <code>models.providers</code>。</p>
+<div class="pd-cmd">npm run export:json -- --map config/provider-map.json --openclaw-config "C:\\Users\\KSG\\.openclaw\\openclaw.json"</div>
+<p style="margin-top:8px;"><span class="tag tag-config">安全</span> 写入前会自动创建带时间戳的备份文件。</p>
+<p>也支持导出为 .env 文件（Option A）：</p>
+<div class="pd-cmd">npm run export:env -- --map config/provider-map.json --out data/openclaw-provider.env</div>`
+  },
+  {
+    id: 'cycle',
+    icon: '&#128640;',
+    label: '每日循环',
+    color: 'var(--flow-cycle)',
+    title: '第 6 步：稳定每日循环 (cycle:stable)',
+    html: `<p>将 sync + export 封装为生产级循环，增加自动重试、文件锁、报告生成、飞书通知。</p>
+<div class="pd-cmd">npm run cycle:stable -- --openclaw-config "C:\\Users\\KSG\\.openclaw\\openclaw.json"</div>
+<p style="margin-top:8px;"><strong>输出</strong>：</p>
+<ul style="padding-left:20px;line-height:1.8;">
+  <li><span class="tag tag-output">报告</span> <code>data/stable-cycle-report.json</code></li>
+  <li><span class="tag tag-output">历史</span> <code>data/stable-cycle-history/*.json</code></li>
+  <li><span class="tag tag-output">日志</span> <code>data/logs/stable-cycle-*.log</code></li>
+</ul>
+<p style="margin-top:8px;"><strong>飞书通知</strong>：执行完毕后通过 OpenClaw CLI 发送报告摘要到飞书。</p>
+<p><strong>定时触发</strong>：通过 Windows 计划任务每日 09:10 自动执行。</p>
+<div class="pd-cmd">powershell -File .\\scripts\\install-daily-task.ps1 -RunAt "09:10"</div>`
+  }
+];
+
+let currentStep = 0;
+const totalSteps = pipelineSteps.length;
+let isPlaying = false;
+let playTimer = null;
+let playSpeed = 1800;
+
+function buildPipeline() {
+  const container = document.getElementById('pipelineViz');
+  container.innerHTML = '';
+
+  pipelineSteps.forEach((step, i) => {
+    if (i > 0) {
+      const arrow = document.createElement('div');
+      arrow.className = 'pipe-arrow';
+      arrow.innerHTML = '&#10148;';
+      container.appendChild(arrow);
+    }
+
+    const el = document.createElement('div');
+    el.className = 'pipe-step' + (i === currentStep ? ' active' : '');
+    el.onclick = () => goToStep(i);
+    el.innerHTML = `
+      <div class="step-circle" style="background:${step.color}20; border-color:${i === currentStep ? step.color : 'transparent'};">
+        <span style="filter:none;">${step.icon}</span>
+      </div>
+      <div class="step-label">${step.label}</div>
+    `;
+    container.appendChild(el);
+  });
+}
+
+function renderPipeline() {
+  const steps = document.querySelectorAll('.pipe-step');
+  steps.forEach((el, i) => {
+    el.classList.toggle('active', i === currentStep);
+    const circle = el.querySelector('.step-circle');
+    circle.style.borderColor = i === currentStep ? pipelineSteps[i].color : 'transparent';
+  });
+
+  const step = pipelineSteps[currentStep];
+  document.getElementById('pipeDetail').innerHTML = `
+    <div class="pd-title" style="color:${step.color};">${step.title}</div>
+    ${step.html}
+  `;
+
+  updateStepIndicator();
+  updateButtons();
+}
+
+function nextStep() {
+  if (currentStep < totalSteps - 1) { currentStep++; renderPipeline(); }
+}
+
+function prevStep() {
+  if (currentStep > 0) { currentStep--; renderPipeline(); }
+}
+
+function goToStep(n) {
+  currentStep = Math.max(0, Math.min(n, totalSteps - 1));
+  renderPipeline();
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  if (isPlaying) {
+    playTimer = setInterval(() => {
+      if (currentStep < totalSteps - 1) nextStep();
+      else togglePlay();
+    }, playSpeed);
+  } else {
+    clearInterval(playTimer);
+  }
+  updatePlayButton();
+}
+
+function setSpeed(speed) {
+  playSpeed = parseInt(speed);
+  if (isPlaying) {
+    clearInterval(playTimer);
+    playTimer = setInterval(() => {
+      if (currentStep < totalSteps - 1) nextStep();
+      else togglePlay();
+    }, playSpeed);
+  }
+}
+
+function updatePlayButton() {
+  const btn = document.getElementById('playBtn');
+  if (btn) btn.innerHTML = isPlaying ? '&#9208; 暂停' : '&#9654; 播放';
+}
+
+function updateStepIndicator() {
+  const indicator = document.getElementById('stepIndicator');
+  if (indicator) indicator.textContent = `步骤 ${currentStep + 1} / ${totalSteps}`;
+  const progress = document.getElementById('progressBar');
+  if (progress) progress.value = currentStep;
+}
+
+function updateButtons() {
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  if (prevBtn) prevBtn.disabled = currentStep === 0;
+  if (nextBtn) nextBtn.disabled = currentStep === totalSteps - 1;
+}
+
+// 键盘导航（管线步骤）
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.altKey) return; // alt+arrow 留给侧边栏
+
+  const pipelineSection = document.getElementById('section-pipeline');
+  if (!pipelineSection.classList.contains('active')) return;
+
+  switch(e.key) {
+    case 'ArrowLeft': prevStep(); break;
+    case 'ArrowRight': nextStep(); break;
+    case ' ': e.preventDefault(); togglePlay(); break;
+    case 'Home': goToStep(0); break;
+    case 'End': goToStep(totalSteps - 1); break;
+  }
+});
+
+// ===================== 初始化 =====================
+buildPipeline();
+renderPipeline();
+</script>
+</body>
+</html>

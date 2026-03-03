@@ -1,0 +1,15 @@
+{
+  "openai": {
+    "apiKey": "${OPENAI_API_KEY}",
+    "baseUrl": "${OPENAI_API_BASE}"
+  },
+  "telegram": {
+    "botToken": "${TELEGRAM_BOT_TOKEN}",
+    "allowedChatIds": ["${TELEGRAM_CHAT_ID}"]
+  },
+  "feishu": {
+    "appId": "${FEISHU_APP_ID}",
+    "appSecret": "${FEISHU_APP_SECRET}"
+  },
+  "keys": []
+}

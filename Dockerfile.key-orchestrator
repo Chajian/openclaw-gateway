@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache curl \
+ && LATEST=$(curl -s https://api.github.com/repos/aptible/supercronic/releases/latest | grep -o '"tag_name":"[^"]*' | cut -d'"' -f4) \
+ && curl -fsSL "https://github.com/aptible/supercronic/releases/download/${LATEST}/supercronic-linux-amd64" -o /usr/local/bin/supercronic \
+ && chmod +x /usr/local/bin/supercronic
+
+WORKDIR /app
+COPY package.json ./
+COPY packages/ packages/
+COPY key-orchestrator/ key-orchestrator/
+
+RUN npm install --production
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

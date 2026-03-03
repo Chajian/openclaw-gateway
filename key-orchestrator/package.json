@@ -1,0 +1,32 @@
+{
+  "name": "key-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Compatibility layer — delegates to @openclaw/core and plugins. Will be retired.",
+  "scripts": {
+    "sync": "node src/sync-keys.mjs",
+    "import:token": "node src/import-secret.mjs",
+    "onboard:newapi": "node src/onboard-newapi-site.mjs",
+    "discover:linuxdo": "node src/discover-linuxdo-public-sites.mjs",
+    "upsert:linuxdo": "node src/upsert-sites-from-discovery.mjs",
+    "onboard:linuxdo": "node src/onboard-linuxdo-oauth-sites.mjs",
+    "cycle:linuxdo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-linuxdo-discovery-cycle.ps1",
+    "task:install:linuxdo": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-linuxdo-daily-task.ps1",
+    "cycle:auto": "node src/auto-cycle.mjs",
+    "cycle:stable": "node src/stable-cycle.mjs",
+    "export:env": "node src/export-openclaw-env.mjs",
+    "export:json": "node src/export-openclaw-json.mjs"
+  },
+  "dependencies": {
+    "@openclaw/core": "*",
+    "@openclaw/plugin-adapter-newapi": "*",
+    "@openclaw/plugin-linuxdo-discover": "*",
+    "@openclaw/plugin-linuxdo-onboard": "*",
+    "@openclaw/plugin-linuxdo-monitor": "*",
+    "@openclaw/plugin-schedule-windows": "*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

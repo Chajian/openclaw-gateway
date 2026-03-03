@@ -1,0 +1,9 @@
+node_modules/
+.git/
+.env
+data/
+_sim_creds.txt
+_refs/
+*.enc.json
+*.md
+!README.md

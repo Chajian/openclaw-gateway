@@ -1,0 +1,55 @@
+{
+  "sites": [
+    {
+      "id": "demo-newapi-site",
+      "type": "new-api",
+      "enabled": false,
+      "baseUrl": "https://example-newapi.site/console",
+      "auth": {
+        "usernameSecret": "demo_newapi_username",
+        "passwordSecret": "demo_newapi_password",
+        "accessTokenSecret": "demo_newapi_access_token",
+        "userIdSecret": "demo_newapi_user_id",
+        "turnstileTokenSecret": "",
+        "registerIfNeeded": true
+      },
+      "settings": {
+        "autoCreateToken": true,
+        "autoTokenName": "openclaw-auto",
+        "autoTokenUnlimited": true,
+        "autoTokenRemainQuota": 0
+      }
+    },
+    {
+      "id": "demo-public-site",
+      "type": "mock",
+      "enabled": false,
+      "auth": {
+        "tokenSecret": "demo_public_token"
+      },
+      "settings": {
+        "seed": "demo-seed"
+      }
+    },
+    {
+      "id": "provider-a",
+      "type": "http",
+      "enabled": false,
+      "baseUrl": "https://api.example.org",
+      "auth": {
+        "tokenSecret": "provider_a_access_token"
+      },
+      "settings": {
+        "listKeysPath": "/v1/keys",
+        "keysDataPath": "data",
+        "keyIdField": "id",
+        "keyValueField": "apiKey",
+        "quotaField": "remaining",
+        "quotaUnit": "credits",
+        "quotaPathTemplate": "/v1/keys/{keyId}/quota",
+        "quotaDataPath": "data",
+        "quotaResponseField": "remaining"
+      }
+    }
+  ]
+}

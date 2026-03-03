@@ -1,0 +1,21 @@
+{
+  "name": "@openclaw/plugin-adapter-newapi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw plugin: new-api site adapter and onboard command.",
+  "main": "src/index.mjs",
+  "openclaw": {
+    "type": "plugin",
+    "provides": {
+      "adapters": ["new-api"],
+      "commands": ["onboard:newapi"]
+    }
+  },
+  "dependencies": {
+    "@openclaw/core": "*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

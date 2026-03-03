@@ -1,0 +1,24 @@
+{
+  "name": "@openclaw/plugin-linuxdo-onboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw plugin: automated LinuxDo OAuth browser onboarding for new-api sites.",
+  "main": "src/index.mjs",
+  "openclaw": {
+    "type": "plugin",
+    "provides": {
+      "commands": ["onboard:linuxdo"],
+      "pipeline": ["linuxdo-onboard"]
+    }
+  },
+  "scripts": {
+    "onboard": "node src/onboard-linuxdo-oauth-sites.mjs"
+  },
+  "dependencies": {
+    "@openclaw/core": "*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

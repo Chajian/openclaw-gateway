@@ -1,0 +1,21 @@
+{
+  "name": "@openclaw/plugin-linuxdo-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenClaw plugin: monitor LinuxDo welfare posts and push to Telegram.",
+  "main": "src/index.mjs",
+  "openclaw": {
+    "type": "plugin",
+    "provides": {
+      "commands": ["monitor:start"],
+      "schedules": ["linuxdo-monitor"]
+    }
+  },
+  "dependencies": {
+    "@openclaw/core": "*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

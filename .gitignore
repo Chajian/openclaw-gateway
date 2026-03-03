@@ -1,0 +1,17 @@
+node_modules/
+.env
+data/
+
+# runtime configs (use *.example.json as template)
+config/openclaw.json
+key-orchestrator/config/sites.json
+key-orchestrator/config/sites.test.json
+key-orchestrator/config/provider-map.json
+key-orchestrator/config/provider-map.test.json
+
+# sensitive
+_sim_creds.txt
+*.enc.json
+
+# reference repos (not part of this project)
+_refs/
