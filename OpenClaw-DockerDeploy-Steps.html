@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw Docker 部署教学 - 交互式可视化</title>
+  <style>
+    :root {
+      --primary: #2196F3;
+      --secondary: #FF9800;
+      --success: #4CAF50;
+      --danger: #F44336;
+      --warning: #FFC107;
+      --gray-100: #F5F5F5;
+      --gray-200: #EEEEEE;
+      --gray-300: #E0E0E0;
+      --gray-500: #9E9E9E;
+      --gray-700: #616161;
+      --gray-900: #212121;
+      --component: #42A5F5;
+      --service: #66BB6A;
+      --database: #FFA726;
+      --api-gateway: #26C6DA;
+      --external: #78909C;
+      --gradient-blue: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif;
+      background: var(--gray-100);
+      min-height: 100vh;
+      color: var(--gray-900);
+    }
+
+    .dashboard {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .title {
+      text-align: center;
+      background: var(--gradient-blue);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 2em;
+      padding: 16px 20px 4px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--gray-500);
+      font-size: 0.95em;
+      margin-bottom: 16px;
+    }
+
+    .dashboard-body {
+      display: grid;
+      grid-template-columns: 290px 1fr;
+      gap: 12px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 18px;
+    }
+
+    /* ===== Sidebar ===== */
+    .sidebar {
+      position: sticky;
+      top: 12px;
+      align-self: start;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 14px;
+    }
+
+    .sidebar h3 {
+      font-size: 0.85em;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    .step-nav {
+      list-style: none;
+    }
+
+    .step-nav li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-bottom: 2px;
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+
+    .step-nav li:hover { background: var(--gray-100); }
+
+    .step-nav li.active {
+      background: #E3F2FD;
+      font-weight: 600;
+    }
+
+    .step-nav li.completed .step-dot { background: var(--success); }
+    .step-nav li.active .step-dot { background: var(--primary); box-shadow: 0 0 0 3px rgba(33,150,243,0.25); }
+
+    .step-dot {
+      width: 10px;
+      height: 10px;
+      min-width: 10px;
+      border-radius: 50%;
+      background: var(--gray-300);
+      margin-top: 5px;
+      transition: all 0.3s;
+    }
+
+    .mode-toggle {
+      display: flex;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 14px 0;
+      border: 1px solid var(--gray-300);
+    }
+
+    .mode-toggle button {
+      flex: 1;
+      padding: 8px 4px;
+      border: none;
+      font-size: 0.82em;
+      cursor: pointer;
+      background: white;
+      color: var(--gray-700);
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .mode-toggle button.active {
+      background: var(--primary);
+      color: white;
+    }
+
+    .key-hint {
+      margin-top: 14px;
+      padding: 10px;
+      background: var(--gray-100);
+      border-radius: 8px;
+      font-size: 0.78em;
+      color: var(--gray-500);
+      line-height: 1.8;
+    }
+
+    .key-hint kbd {
+      background: white;
+      border: 1px solid var(--gray-300);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-family: inherit;
+      font-size: 0.92em;
+    }
+
+    /* ===== Main Area ===== */
+    .main-area {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    /* Architecture Diagram */
+    .arch-container {
+      position: relative;
+      min-height: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .arch-svg {
+      width: 100%;
+      max-width: 820px;
+      height: 310px;
+    }
+
+    /* Service Boxes in SVG */
+    .svc-box {
+      rx: 10;
+      ry: 10;
+      stroke-width: 2;
+      transition: all 0.4s;
+    }
+
+    .svc-label {
+      font-size: 13px;
+      font-weight: 600;
+      fill: white;
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .svc-sublabel {
+      font-size: 10px;
+      fill: rgba(255,255,255,0.85);
+      text-anchor: middle;
+      pointer-events: none;
+    }
+
+    .arrow-line {
+      stroke-width: 2;
+      fill: none;
+      marker-end: url(#arrowhead);
+      transition: all 0.4s;
+    }
+
+    .arrow-label {
+      font-size: 10px;
+      fill: var(--gray-700);
+      text-anchor: middle;
+    }
+
+    .dimmed { opacity: 0.2; }
+    .highlight-pulse {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.15); }
+    }
+
+    /* Step Content */
+    .step-content {
+      padding: 0;
+    }
+
+    .step-title-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .step-number {
+      background: var(--primary);
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.95em;
+      flex-shrink: 0;
+    }
+
+    .step-title-text {
+      font-size: 1.2em;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .step-desc {
+      color: var(--gray-700);
+      line-height: 1.7;
+      margin-bottom: 16px;
+      font-size: 0.95em;
+    }
+
+    .step-desc strong { color: var(--gray-900); }
+
+    /* Code Block */
+    .code-block {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 12px 0;
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 0.85em;
+    }
+
+    .code-header {
+      background: #313244;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .code-header span {
+      color: #a6adc8;
+      font-size: 0.85em;
+    }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid #585b70;
+      color: #a6adc8;
+      padding: 3px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.85em;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover { background: #585b70; color: white; }
+
+    .code-body {
+      padding: 14px;
+      overflow-x: auto;
+      line-height: 1.65;
+      white-space: pre;
+    }
+
+    .code-body .comment { color: #6c7086; }
+    .code-body .cmd { color: #89b4fa; }
+    .code-body .flag { color: #f9e2af; }
+    .code-body .string { color: #a6e3a1; }
+    .code-body .var { color: #fab387; }
+    .code-body .key { color: #cba6f7; }
+    .code-body .highlight-line {
+      background: rgba(137, 180, 250, 0.12);
+      display: inline-block;
+      width: 100%;
+      margin: 0 -14px;
+      padding: 0 14px;
+    }
+
+    /* File Tree */
+    .file-tree {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.84em;
+      line-height: 1.8;
+      margin: 12px 0;
+      border: 1px solid var(--gray-200);
+    }
+
+    .file-tree .dir { color: var(--primary); font-weight: 600; }
+    .file-tree .file { color: var(--gray-700); }
+    .file-tree .highlight-file { color: var(--danger); font-weight: 600; }
+    .file-tree .new-badge {
+      background: var(--success);
+      color: white;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      margin-left: 6px;
+      font-weight: 500;
+    }
+
+    /* Info Boxes */
+    .info-box {
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 12px 0;
+      font-size: 0.9em;
+      line-height: 1.6;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .info-box.tip {
+      background: #E8F5E9;
+      border-left: 4px solid var(--success);
+    }
+
+    .info-box.warn {
+      background: #FFF8E1;
+      border-left: 4px solid var(--warning);
+    }
+
+    .info-box.danger {
+      background: #FFEBEE;
+      border-left: 4px solid var(--danger);
+    }
+
+    .info-box .icon { font-size: 1.2em; flex-shrink: 0; margin-top: 1px; }
+
+    /* Comparison Table */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      font-size: 0.88em;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--gray-200);
+    }
+
+    .compare-table th {
+      background: #f0f4f8;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--gray-700);
+    }
+
+    .compare-table td {
+      padding: 10px 14px;
+      border-top: 1px solid var(--gray-200);
+    }
+
+    .compare-table tr:hover td { background: #fafbfc; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-size: 0.82em;
+      font-weight: 600;
+    }
+
+    .badge-dev { background: #E3F2FD; color: #1565C0; }
+    .badge-prod { background: #E8F5E9; color: #2E7D32; }
+
+    /* Env Table */
+    .env-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+      font-size: 0.85em;
+    }
+
+    .env-table th {
+      background: #f0f4f8;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    .env-table td {
+      padding: 8px 12px;
+      border-top: 1px solid var(--gray-200);
+      font-family: 'Consolas', monospace;
+    }
+
+    .env-table td:first-child { color: var(--primary); font-weight: 500; }
+
+    .env-table .required { color: var(--danger); font-weight: 600; }
+    .env-table .optional { color: var(--gray-500); }
+
+    /* Docker Status Animation */
+    .docker-status {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .container-card {
+      border-radius: 10px;
+      padding: 14px;
+      text-align: center;
+      transition: all 0.5s;
+      border: 2px solid transparent;
+    }
+
+    .container-card.starting {
+      background: #FFF8E1;
+      border-color: var(--warning);
+      animation: containerBoot 1.5s ease-in-out infinite;
+    }
+
+    .container-card.running {
+      background: #E8F5E9;
+      border-color: var(--success);
+    }
+
+    .container-card.idle {
+      background: var(--gray-100);
+      border-color: var(--gray-300);
+    }
+
+    @keyframes containerBoot {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.02); }
+    }
+
+    .container-icon { font-size: 2em; margin-bottom: 6px; }
+    .container-name { font-weight: 700; font-size: 0.95em; margin-bottom: 4px; }
+    .container-status { font-size: 0.8em; color: var(--gray-500); }
+
+    /* Flow Arrows */
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 14px 0;
+      padding: 16px;
+      background: var(--gray-100);
+      border-radius: 10px;
+    }
+
+    .flow-node {
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.85em;
+      font-weight: 600;
+      color: white;
+      text-align: center;
+      transition: all 0.4s;
+    }
+
+    .flow-arrow {
+      color: var(--gray-500);
+      font-size: 1.2em;
+      transition: all 0.4s;
+    }
+
+    .flow-node.active-flow {
+      transform: scale(1.08);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    /* Controls */
+    .controls-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: white;
+      cursor: pointer;
+      font-size: 0.88em;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .btn:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .btn-secondary { background: var(--gray-500); }
+    .btn-success { background: var(--success); }
+
+    .progress-range {
+      width: 180px;
+      accent-color: var(--primary);
+    }
+
+    .step-indicator {
+      font-size: 0.88em;
+      color: var(--gray-500);
+      font-weight: 500;
+      min-width: 90px;
+      text-align: center;
+    }
+
+    .speed-select {
+      padding: 7px 10px;
+      border: 1px solid var(--gray-300);
+      border-radius: 8px;
+      font-size: 0.85em;
+      background: white;
+      cursor: pointer;
+    }
+
+    /* Terminal animation */
+    .terminal-output {
+      background: #1e1e2e;
+      color: #a6e3a1;
+      border-radius: 10px;
+      padding: 14px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.82em;
+      line-height: 1.7;
+      margin: 12px 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .terminal-output .prompt { color: #89b4fa; }
+    .terminal-output .output { color: #cdd6f4; }
+    .terminal-output .success { color: #a6e3a1; }
+    .terminal-output .error { color: #f38ba8; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .dashboard-body {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: static;
+        max-height: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <h1 class="title">OpenClaw Docker 部署教学</h1>
+    <p class="subtitle">从零到一键部署 —— 交互式分步指南 | 按 ← → 切换步骤 | 空格键 播放/暂停</p>
+
+    <div class="dashboard-body">
+      <!-- Sidebar -->
+      <div class="card sidebar">
+        <h3>部署模式</h3>
+        <div class="mode-toggle">
+          <button id="modeDevBtn" onclick="setMode('dev')">开发模式</button>
+          <button id="modeProdBtn" class="active" onclick="setMode('prod')">生产模式</button>
+        </div>
+
+        <h3>步骤导航</h3>
+        <ul class="step-nav" id="stepNav"></ul>
+
+        <div class="key-hint">
+          <kbd>←</kbd> <kbd>→</kbd> 切换步骤<br>
+          <kbd>Space</kbd> 播放/暂停<br>
+          <kbd>Home</kbd> <kbd>End</kbd> 首/末步骤
+        </div>
+      </div>
+
+      <!-- Main -->
+      <div class="main-area">
+        <!-- Architecture Diagram -->
+        <div class="card" id="archCard">
+          <div class="arch-container">
+            <svg class="arch-svg" id="archSvg" viewBox="0 0 820 310">
+              <defs>
+                <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6" fill="#9E9E9E"/>
+                </marker>
+                <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6" fill="#42A5F5"/>
+                </marker>
+                <filter id="shadow">
+                  <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.15"/>
+                </filter>
+              </defs>
+
+              <!-- User -->
+              <rect class="svc-box" id="box-user" x="10" y="115" width="100" height="70" fill="#78909C" filter="url(#shadow)"/>
+              <text class="svc-label" x="60" y="148">Telegram</text>
+              <text class="svc-sublabel" x="60" y="163">/ 飞书 / API</text>
+
+              <!-- Gateway -->
+              <rect class="svc-box" id="box-gateway" x="170" y="100" width="140" height="100" fill="#26C6DA" filter="url(#shadow)"/>
+              <text class="svc-label" x="240" y="140">Gateway</text>
+              <text class="svc-sublabel" x="240" y="158">LLM 路由网关</text>
+              <text class="svc-sublabel" x="240" y="173" style="font-size:9px">:3000</text>
+
+              <!-- Config Volume -->
+              <rect class="svc-box" id="box-config" x="340" y="20" width="140" height="55" fill="#FFA726" filter="url(#shadow)" rx="6"/>
+              <text class="svc-label" x="410" y="45" style="font-size:11px">openclaw-config</text>
+              <text class="svc-sublabel" x="410" y="60" style="font-size:9px">Docker Volume</text>
+
+              <!-- Key Orchestrator -->
+              <rect class="svc-box" id="box-key" x="370" y="115" width="160" height="90" fill="#66BB6A" filter="url(#shadow)"/>
+              <text class="svc-label" x="450" y="150">Key Orchestrator</text>
+              <text class="svc-sublabel" x="450" y="168">密钥同步 + 导出</text>
+              <text class="svc-sublabel" x="450" y="183" style="font-size:9px">Cron 定时任务</text>
+
+              <!-- LinuxDo Monitor -->
+              <rect class="svc-box" id="box-monitor" x="590" y="115" width="150" height="80" fill="#AB47BC" filter="url(#shadow)"/>
+              <text class="svc-label" x="665" y="148">Monitor</text>
+              <text class="svc-sublabel" x="665" y="165">LinuxDo 福利监控</text>
+
+              <!-- Data Volume -->
+              <rect class="svc-box" id="box-data" x="420" y="245" width="120" height="50" fill="#FFA726" filter="url(#shadow)" rx="6"/>
+              <text class="svc-label" x="480" y="268" style="font-size:11px">key-data</text>
+              <text class="svc-sublabel" x="480" y="282" style="font-size:9px">Docker Volume</text>
+
+              <!-- Arrows -->
+              <line class="arrow-line" id="arr-user-gw" x1="110" y1="150" x2="168" y2="150" stroke="#9E9E9E"/>
+              <line class="arrow-line" id="arr-gw-config" x1="275" y1="100" x2="370" y2="55" stroke="#9E9E9E"/>
+              <line class="arrow-line" id="arr-key-config" x1="430" y1="115" x2="415" y2="77" stroke="#9E9E9E"/>
+              <line class="arrow-line" id="arr-key-data" x1="460" y1="205" x2="475" y2="243" stroke="#9E9E9E"/>
+              <line class="arrow-line" id="arr-monitor-tg" x1="665" y1="195" x2="665" y2="270" stroke="#9E9E9E"/>
+
+              <!-- Telegram push label -->
+              <rect x="620" y="270" width="90" height="28" rx="6" fill="#78909C" filter="url(#shadow)"/>
+              <text class="svc-label" x="665" y="289" style="font-size:10px">Telegram</text>
+
+              <!-- Config Init -->
+              <rect class="svc-box" id="box-init" x="170" y="20" width="120" height="45" fill="#BDBDBD" filter="url(#shadow)" rx="6"/>
+              <text class="svc-label" x="230" y="40" style="font-size:11px;fill:#424242">config-init</text>
+              <text class="svc-sublabel" x="230" y="54" style="font-size:9px;fill:#616161">初始化配置</text>
+
+              <line class="arrow-line" id="arr-init-config" x1="290" y1="42" x2="338" y2="42" stroke="#9E9E9E"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Step Content -->
+        <div class="card step-content" id="stepContent"></div>
+
+        <!-- Controls -->
+        <div class="card controls-bar">
+          <button class="btn btn-secondary" id="prevBtn" onclick="prevStep()">&#9664; 上一步</button>
+          <button class="btn" id="playBtn" onclick="togglePlay()">&#9654; 播放</button>
+          <button class="btn btn-secondary" id="nextBtn" onclick="nextStep()">下一步 &#9654;</button>
+          <span class="step-indicator" id="stepIndicator">步骤 1 / 8</span>
+          <input type="range" class="progress-range" id="progressBar" min="0" max="7" value="0" oninput="goToStep(parseInt(this.value))">
+          <select class="speed-select" onchange="setSpeed(this.value)">
+            <option value="3000">慢速</option>
+            <option value="1800" selected>正常</option>
+            <option value="800">快速</option>
+          </select>
+          <button class="btn btn-secondary" onclick="goToStep(0)">&#x27F2; 重置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ===== Data =====
+const STEPS_PROD = [
+  {
+    title: '项目架构总览',
+    nav: '架构总览',
+    highlight: ['box-user','box-gateway','box-key','box-monitor','box-config','box-data','box-init'],
+    desc: `
+      <p class="step-desc">
+        OpenClaw 由 <strong>3 个微服务</strong> + <strong>1 个初始化容器</strong> 组成，通过 Docker Compose 一键编排：
+      </p>
+      <table class="compare-table">
+        <tr><th>服务</th><th>职责</th><th>镜像</th></tr>
+        <tr>
+          <td><strong style="color:#26C6DA">Gateway</strong></td>
+          <td>接收 Telegram/飞书消息，路由到 LLM API</td>
+          <td><code>ghcr.io/chajian/openclaw-gateway</code></td>
+        </tr>
+        <tr>
+          <td><strong style="color:#66BB6A">Key Orchestrator</strong></td>
+          <td>定时同步 API 密钥，导出 openclaw.json 配置</td>
+          <td><code>ghcr.io/chajian/openclaw-key-orchestrator</code></td>
+        </tr>
+        <tr>
+          <td><strong style="color:#AB47BC">Monitor</strong></td>
+          <td>监控 LinuxDo 福利信息，推送到 Telegram</td>
+          <td><code>ghcr.io/chajian/openclaw-monitor</code></td>
+        </tr>
+        <tr>
+          <td><strong style="color:#BDBDBD">config-init</strong></td>
+          <td>首次启动时拷贝配置模板（运行后自动退出）</td>
+          <td><code>busybox</code></td>
+        </tr>
+      </table>
+      <div class="info-box tip">
+        <span class="icon">&#128161;</span>
+        <div><strong>生产模式 vs 开发模式：</strong>生产模式直接拉取 GHCR 预构建镜像，<strong>不需要源码</strong>。开发模式从本地源码 build 镜像，适合二次开发。</div>
+      </div>
+    `
+  },
+  {
+    title: '环境准备',
+    nav: '环境准备',
+    highlight: [],
+    desc: `
+      <p class="step-desc">在开始之前，确保你的服务器已安装 <strong>Docker</strong> 和 <strong>Docker Compose</strong>。</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>检查 Docker 环境</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="comment"># 检查 Docker 版本</span>
+<span class="cmd">docker</span> <span class="flag">--version</span>
+<span class="comment"># Docker version 27.x.x</span>
+
+<span class="comment"># 检查 Docker Compose 版本</span>
+<span class="cmd">docker</span> compose <span class="flag">version</span>
+<span class="comment"># Docker Compose version v2.x.x</span></div>
+      </div>
+
+      <div class="info-box warn">
+        <span class="icon">&#9888;&#65039;</span>
+        <div><strong>版本要求：</strong>Docker >= 20.10，Docker Compose V2（<code>docker compose</code> 命令，不是旧版 <code>docker-compose</code>）。</div>
+      </div>
+
+      <div class="info-box tip">
+        <span class="icon">&#128230;</span>
+        <div><strong>没有安装？</strong>一键安装：<code>curl -fsSL https://get.docker.com | sh</code>（Linux），或从 Docker Desktop 官网下载（Windows/Mac）。</div>
+      </div>
+    `
+  },
+  {
+    title: '下载部署文件',
+    nav: '下载文件',
+    highlight: ['box-init'],
+    desc: `
+      <p class="step-desc">生产模式只需要 <strong>3 个文件</strong>，不需要 clone 整个仓库：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>下载部署文件</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="comment"># 1. 下载 docker-compose 生产配置</span>
+<span class="cmd">wget</span> <span class="string">https://raw.githubusercontent.com/Chajian/openclaw-gateway/main/docker-compose.prod.yml</span>
+
+<span class="comment"># 2. 下载环境变量模板</span>
+<span class="cmd">wget</span> <span class="string">https://raw.githubusercontent.com/Chajian/openclaw-gateway/main/.env.example</span> <span class="flag">-O</span> .env
+
+<span class="comment"># 3. 下载配置文件模板</span>
+<span class="cmd">mkdir</span> <span class="flag">-p</span> config
+<span class="cmd">wget</span> <span class="string">https://raw.githubusercontent.com/Chajian/openclaw-gateway/main/config/openclaw.json.example</span> <span class="flag">-O</span> config/openclaw.json.example</div>
+      </div>
+
+      <p class="step-desc">下载完成后，你的目录结构应该是：</p>
+
+      <div class="file-tree">
+        <span class="dir">deploy/</span><br>
+        &nbsp;&nbsp;├── <span class="highlight-file">docker-compose.prod.yml</span> <span class="new-badge">核心</span><br>
+        &nbsp;&nbsp;├── <span class="highlight-file">.env</span> <span class="new-badge">必须编辑</span><br>
+        &nbsp;&nbsp;└── <span class="dir">config/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── <span class="file">openclaw.json.example</span>
+      </div>
+    `
+  },
+  {
+    title: '配置环境变量',
+    nav: '配置 .env',
+    highlight: ['box-gateway','box-key','box-monitor'],
+    desc: `
+      <p class="step-desc">编辑 <code>.env</code> 文件，填入你自己的 Token 和密钥：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>.env</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="comment"># ===== Gateway =====</span>
+<span class="var">OPENAI_API_KEY</span>=<span class="string">sk-your-real-key</span>
+<span class="var">OPENAI_API_BASE</span>=<span class="string">https://api.openai.com/v1</span>
+<span class="var">DEFAULT_MODEL</span>=<span class="string">gpt-4o</span>
+
+<span class="comment"># Telegram Bot</span>
+<span class="var">TELEGRAM_BOT_TOKEN</span>=<span class="string">123456:ABC-your-token</span>
+<span class="var">TELEGRAM_CHAT_ID</span>=<span class="string">your-chat-id</span>
+
+<span class="comment"># Gateway 端口</span>
+<span class="var">GATEWAY_PORT</span>=<span class="string">3000</span>
+
+<span class="comment"># ===== Key Orchestrator =====</span>
+<span class="var">KEYHUB_MASTER_KEY</span>=<span class="string">your-master-key</span>
+<span class="var">CRON_SCHEDULE</span>=<span class="string">0 10 9 * * *</span>
+
+<span class="comment"># ===== Monitor =====</span>
+<span class="var">MONITOR_INTERVAL_MS</span>=<span class="string">600000</span></div>
+      </div>
+
+      <table class="env-table">
+        <tr><th>变量</th><th>说明</th><th>必填</th></tr>
+        <tr><td>OPENAI_API_KEY</td><td>OpenAI 或兼容 API 的密钥</td><td class="required">必填</td></tr>
+        <tr><td>TELEGRAM_BOT_TOKEN</td><td>Telegram Bot 的 Token</td><td class="required">必填</td></tr>
+        <tr><td>TELEGRAM_CHAT_ID</td><td>接收消息的聊天 ID</td><td class="required">必填</td></tr>
+        <tr><td>KEYHUB_MASTER_KEY</td><td>密钥管理主密钥</td><td class="required">必填</td></tr>
+        <tr><td>GATEWAY_PORT</td><td>Gateway 监听端口</td><td class="optional">默认 3000</td></tr>
+        <tr><td>CRON_SCHEDULE</td><td>密钥同步 Cron 表达式</td><td class="optional">默认每天 9:10</td></tr>
+        <tr><td>MONITOR_INTERVAL_MS</td><td>监控轮询间隔（毫秒）</td><td class="optional">默认 10 分钟</td></tr>
+      </table>
+
+      <div class="info-box danger">
+        <span class="icon">&#128274;</span>
+        <div><strong>安全提醒：</strong><code>.env</code> 文件包含敏感信息，<strong>绝不要提交到 Git 或公开分享</strong>。生产服务器上建议设置文件权限 <code>chmod 600 .env</code>。</div>
+      </div>
+    `
+  },
+  {
+    title: '启动服务',
+    nav: '启动服务',
+    highlight: ['box-init','box-gateway','box-key','box-monitor'],
+    desc: `
+      <p class="step-desc">一条命令启动所有服务：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>启动命令</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">up</span> <span class="flag">-d</span></div>
+      </div>
+
+      <p class="step-desc">Docker 会按顺序完成以下动作：</p>
+
+      <div id="bootSequence" class="docker-status"></div>
+
+      <div class="info-box tip">
+        <span class="icon">&#9889;</span>
+        <div><strong>首次启动：</strong>需要从 GHCR 拉取镜像，根据网络速度可能需要 1-3 分钟。后续启动秒级完成。</div>
+      </div>
+    `
+  },
+  {
+    title: '验证部署',
+    nav: '验证部署',
+    highlight: ['box-gateway','box-key','box-monitor'],
+    desc: `
+      <p class="step-desc">启动后，用以下命令确认所有容器正常运行：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>查看容器状态</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">ps</span></div>
+      </div>
+
+      <div class="terminal-output">
+<span class="prompt">$</span> <span class="output">docker compose -f docker-compose.prod.yml ps</span>
+<span class="output">NAME                 IMAGE                                         STATUS</span>
+<span class="success">openclaw-gateway     ghcr.io/chajian/openclaw-gateway:latest       Up 2 minutes</span>
+<span class="success">key-orchestrator     ghcr.io/chajian/openclaw-key-orchestrator      Up 2 minutes</span>
+<span class="success">linuxdo-monitor      ghcr.io/chajian/openclaw-monitor:latest        Up 2 minutes</span>
+<span class="output">config-init          busybox                                       Exited (0)</span>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header"><span>查看日志</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="comment"># 查看所有服务日志</span>
+<span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">logs</span> <span class="flag">-f</span>
+
+<span class="comment"># 只看 Gateway 日志</span>
+<span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">logs</span> <span class="flag">-f</span> openclaw-gateway</div>
+      </div>
+
+      <div class="info-box tip">
+        <span class="icon">&#9989;</span>
+        <div><strong>验证成功标志：</strong>3 个服务状态为 <code>Up</code>，config-init 状态为 <code>Exited (0)</code>（正常退出）。给 Telegram Bot 发一条消息，如果收到 AI 回复，说明部署完成！</div>
+      </div>
+    `
+  },
+  {
+    title: '日常运维',
+    nav: '日常运维',
+    highlight: [],
+    desc: `
+      <p class="step-desc">部署完成后的常用运维命令：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>运维命令速查</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="comment"># 停止所有服务</span>
+<span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">down</span>
+
+<span class="comment"># 重启某个服务</span>
+<span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">restart</span> openclaw-gateway
+
+<span class="comment"># 更新到最新镜像</span>
+<span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">pull</span>
+<span class="cmd">docker</span> compose <span class="flag">-f</span> docker-compose.prod.yml <span class="cmd">up</span> <span class="flag">-d</span>
+
+<span class="comment"># 查看资源使用</span>
+<span class="cmd">docker</span> <span class="cmd">stats</span> <span class="flag">--no-stream</span></div>
+      </div>
+
+      <table class="compare-table">
+        <tr><th>场景</th><th>命令</th></tr>
+        <tr><td>修改 .env 后生效</td><td><code>docker compose -f docker-compose.prod.yml up -d</code></td></tr>
+        <tr><td>清理旧镜像</td><td><code>docker image prune -f</code></td></tr>
+        <tr><td>查看数据卷</td><td><code>docker volume ls | grep openclaw</code></td></tr>
+        <tr><td>备份配置</td><td><code>docker run --rm -v openclaw-config:/data busybox tar czf - -C /data . > config-backup.tar.gz</code></td></tr>
+        <tr><td>完全卸载（含数据）</td><td><code>docker compose -f docker-compose.prod.yml down -v</code></td></tr>
+      </table>
+
+      <div class="info-box warn">
+        <span class="icon">&#9888;&#65039;</span>
+        <div><strong>注意：</strong><code>down -v</code> 会删除所有 Docker 数据卷（包含配置和密钥数据），请先备份！</div>
+      </div>
+    `
+  },
+  {
+    title: '两种模式对比',
+    nav: '模式对比',
+    highlight: [],
+    desc: `
+      <p class="step-desc">OpenClaw 提供两种 Docker Compose 文件，适用于不同场景：</p>
+
+      <table class="compare-table">
+        <tr>
+          <th></th>
+          <th><span class="badge badge-prod">生产模式</span> docker-compose.prod.yml</th>
+          <th><span class="badge badge-dev">开发模式</span> docker-compose.yml</th>
+        </tr>
+        <tr><td><strong>镜像来源</strong></td><td>GHCR 预构建镜像</td><td>本地源码 build</td></tr>
+        <tr><td><strong>需要源码？</strong></td><td>不需要</td><td>需要 clone 仓库</td></tr>
+        <tr><td><strong>启动速度</strong></td><td>快（拉取即用）</td><td>慢（需要编译）</td></tr>
+        <tr><td><strong>适合场景</strong></td><td>生产部署、VPS 部署</td><td>本地开发、调试、二次开发</td></tr>
+        <tr><td><strong>更新方式</strong></td><td><code>docker compose pull && up -d</code></td><td><code>git pull && docker compose build && up -d</code></td></tr>
+      </table>
+
+      <div class="flow-diagram">
+        <div class="flow-node" style="background:var(--primary)">push 代码到 main</div>
+        <span class="flow-arrow">&#10132;</span>
+        <div class="flow-node" style="background:#FF9800">GitHub Actions CI</div>
+        <span class="flow-arrow">&#10132;</span>
+        <div class="flow-node" style="background:#AB47BC">构建 3 个镜像</div>
+        <span class="flow-arrow">&#10132;</span>
+        <div class="flow-node" style="background:#26C6DA">推送到 GHCR</div>
+        <span class="flow-arrow">&#10132;</span>
+        <div class="flow-node" style="background:var(--success)">用户 docker pull</div>
+      </div>
+
+      <div class="info-box tip">
+        <span class="icon">&#128640;</span>
+        <div><strong>CI/CD 自动化：</strong>每次向 <code>main</code> 分支推送代码，GitHub Actions 会自动构建新的镜像并推送到 GHCR。用户只需要 <code>docker compose pull</code> 即可获取最新版本。</div>
+      </div>
+    `
+  }
+];
+
+const STEPS_DEV = [
+  {
+    title: '项目架构总览',
+    nav: '架构总览',
+    highlight: ['box-user','box-gateway','box-key','box-monitor','box-config','box-data','box-init'],
+    desc: STEPS_PROD[0].desc
+  },
+  {
+    title: '环境准备',
+    nav: '环境准备',
+    highlight: [],
+    desc: STEPS_PROD[1].desc
+  },
+  {
+    title: 'Clone 仓库',
+    nav: 'Clone 仓库',
+    highlight: [],
+    desc: `
+      <p class="step-desc">开发模式需要 clone 完整源码：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>Clone 仓库</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="cmd">git</span> clone <span class="string">https://github.com/Chajian/openclaw-gateway.git</span>
+<span class="cmd">cd</span> openclaw-gateway</div>
+      </div>
+
+      <p class="step-desc">仓库目录结构：</p>
+
+      <div class="file-tree">
+        <span class="dir">openclaw-gateway/</span><br>
+        &nbsp;&nbsp;├── <span class="highlight-file">docker-compose.yml</span> <span class="new-badge">开发用</span><br>
+        &nbsp;&nbsp;├── <span class="file">docker-compose.prod.yml</span><br>
+        &nbsp;&nbsp;├── <span class="file">.env.example</span><br>
+        &nbsp;&nbsp;├── <span class="file">Dockerfile.key-orchestrator</span><br>
+        &nbsp;&nbsp;├── <span class="dir">gateway/</span>  <span style="color:var(--gray-500);font-size:0.85em">&#8592; Gateway 源码 + Dockerfile</span><br>
+        &nbsp;&nbsp;├── <span class="dir">key-orchestrator/</span>  <span style="color:var(--gray-500);font-size:0.85em">&#8592; Key Orchestrator 源码</span><br>
+        &nbsp;&nbsp;├── <span class="dir">packages/</span>  <span style="color:var(--gray-500);font-size:0.85em">&#8592; 核心包 + 插件</span><br>
+        &nbsp;&nbsp;├── <span class="dir">services/linuxdo-monitor/</span>  <span style="color:var(--gray-500);font-size:0.85em">&#8592; Monitor 源码</span><br>
+        &nbsp;&nbsp;├── <span class="dir">config/</span><br>
+        &nbsp;&nbsp;└── <span class="dir">docker/</span>
+      </div>
+    `
+  },
+  {
+    title: '配置环境变量',
+    nav: '配置 .env',
+    highlight: ['box-gateway','box-key','box-monitor'],
+    desc: `
+      <p class="step-desc">从模板复制并编辑 <code>.env</code>：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>创建 .env</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="cmd">cp</span> .env.example .env
+<span class="cmd">nano</span> .env   <span class="comment"># 或用你喜欢的编辑器</span></div>
+      </div>
+    ` + STEPS_PROD[3].desc.split('</p>').slice(1).join('</p>')
+  },
+  {
+    title: '构建并启动',
+    nav: '构建启动',
+    highlight: ['box-init','box-gateway','box-key','box-monitor'],
+    desc: `
+      <p class="step-desc">开发模式使用 <code>docker-compose.yml</code>，会从本地源码 <strong>build</strong> 镜像：</p>
+
+      <div class="code-block">
+        <div class="code-header"><span>构建并启动</span><button class="copy-btn" onclick="copyCode(this)">复制</button></div>
+        <div class="code-body"><span class="comment"># 构建镜像并后台启动（首次需要几分钟）</span>
+<span class="cmd">docker</span> compose <span class="cmd">up</span> <span class="flag">-d</span> <span class="flag">--build</span></div>
+      </div>
+
+      <div id="bootSequence" class="docker-status"></div>
+
+      <div class="info-box tip">
+        <span class="icon">&#128736;&#65039;</span>
+        <div><strong>开发模式特点：</strong>修改源码后，只需要 <code>docker compose up -d --build</code> 即可重新构建。如果只改了某个服务，可以指定：<code>docker compose up -d --build openclaw-gateway</code></div>
+      </div>
+    `
+  },
+  {
+    title: '验证部署',
+    nav: '验证部署',
+    highlight: ['box-gateway','box-key','box-monitor'],
+    desc: STEPS_PROD[5].desc.replace(/docker-compose\.prod\.yml/g, 'docker-compose.yml')
+  },
+  {
+    title: '日常运维',
+    nav: '日常运维',
+    highlight: [],
+    desc: STEPS_PROD[6].desc.replace(/docker-compose\.prod\.yml/g, 'docker-compose.yml')
+  },
+  {
+    title: '两种模式对比',
+    nav: '模式对比',
+    highlight: [],
+    desc: STEPS_PROD[7].desc
+  }
+];
+
+// ===== State =====
+let currentStep = 0;
+let isPlaying = false;
+let playTimer = null;
+let playSpeed = 1800;
+let currentMode = 'prod';
+
+function getSteps() {
+  return currentMode === 'prod' ? STEPS_PROD : STEPS_DEV;
+}
+
+// ===== Step Controls =====
+function nextStep() {
+  const steps = getSteps();
+  if (currentStep < steps.length - 1) { currentStep++; render(); }
+}
+
+function prevStep() {
+  if (currentStep > 0) { currentStep--; render(); }
+}
+
+function goToStep(n) {
+  const steps = getSteps();
+  currentStep = Math.max(0, Math.min(n, steps.length - 1));
+  render();
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  if (isPlaying) {
+    playTimer = setInterval(() => {
+      const steps = getSteps();
+      if (currentStep < steps.length - 1) nextStep();
+      else togglePlay();
+    }, playSpeed);
+  } else {
+    clearInterval(playTimer);
+  }
+  updatePlayButton();
+}
+
+function setSpeed(speed) {
+  playSpeed = parseInt(speed);
+  if (isPlaying) {
+    clearInterval(playTimer);
+    playTimer = setInterval(() => {
+      const steps = getSteps();
+      if (currentStep < steps.length - 1) nextStep();
+      else togglePlay();
+    }, playSpeed);
+  }
+}
+
+function updatePlayButton() {
+  document.getElementById('playBtn').innerHTML = isPlaying ? '&#9646;&#9646; 暂停' : '&#9654; 播放';
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeDevBtn').classList.toggle('active', mode === 'dev');
+  document.getElementById('modeProdBtn').classList.toggle('active', mode === 'prod');
+  currentStep = 0;
+  if (isPlaying) togglePlay();
+  render();
+}
+
+// ===== Keyboard =====
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  switch(e.key) {
+    case 'ArrowLeft': prevStep(); break;
+    case 'ArrowRight': nextStep(); break;
+    case ' ': e.preventDefault(); togglePlay(); break;
+    case 'Home': goToStep(0); break;
+    case 'End': goToStep(getSteps().length - 1); break;
+  }
+});
+
+// ===== Render =====
+function render() {
+  const steps = getSteps();
+  const step = steps[currentStep];
+
+  // Nav
+  const nav = document.getElementById('stepNav');
+  nav.innerHTML = steps.map((s, i) => {
+    const cls = i === currentStep ? 'active' : (i < currentStep ? 'completed' : '');
+    return `<li class="${cls}" onclick="goToStep(${i})"><span class="step-dot"></span><span>${s.nav}</span></li>`;
+  }).join('');
+
+  // Content
+  const content = document.getElementById('stepContent');
+  content.innerHTML = `
+    <div class="step-title-bar">
+      <div class="step-number">${currentStep + 1}</div>
+      <div class="step-title-text">${step.title}</div>
+    </div>
+    ${step.desc}
+  `;
+
+  // Architecture highlights
+  const allBoxes = ['box-user','box-gateway','box-key','box-monitor','box-config','box-data','box-init'];
+  const allArrows = ['arr-user-gw','arr-gw-config','arr-key-config','arr-key-data','arr-monitor-tg','arr-init-config'];
+
+  if (step.highlight.length === 0 || step.highlight.length === allBoxes.length) {
+    // Show all
+    [...allBoxes, ...allArrows].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.remove('dimmed','highlight-pulse'); }
+    });
+  } else {
+    allBoxes.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (step.highlight.includes(id)) {
+        el.classList.remove('dimmed');
+        el.classList.add('highlight-pulse');
+      } else {
+        el.classList.add('dimmed');
+        el.classList.remove('highlight-pulse');
+      }
+    });
+    allArrows.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('dimmed');
+    });
+    // Show relevant arrows
+    if (step.highlight.includes('box-gateway') && step.highlight.includes('box-init')) {
+      ['arr-user-gw','arr-gw-config','arr-key-config','arr-key-data','arr-init-config'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('dimmed');
+      });
+    }
+  }
+
+  // Boot sequence animation
+  const bootEl = document.getElementById('bootSequence');
+  if (bootEl) {
+    renderBootSequence(bootEl);
+  }
+
+  // Progress
+  const bar = document.getElementById('progressBar');
+  bar.max = steps.length - 1;
+  bar.value = currentStep;
+
+  document.getElementById('stepIndicator').textContent = `步骤 ${currentStep + 1} / ${steps.length}`;
+  document.getElementById('prevBtn').disabled = currentStep === 0;
+  document.getElementById('nextBtn').disabled = currentStep === steps.length - 1;
+}
+
+function renderBootSequence(el) {
+  const containers = [
+    { name: 'config-init', icon: '&#9881;&#65039;', desc: '初始化配置' },
+    { name: 'openclaw-gateway', icon: '&#127760;', desc: 'LLM 路由网关' },
+    { name: 'key-orchestrator', icon: '&#128273;', desc: '密钥管理' },
+    { name: 'linuxdo-monitor', icon: '&#128225;', desc: '福利监控' }
+  ];
+
+  let bootStep = 0;
+  el.innerHTML = containers.map(c => `
+    <div class="container-card idle" id="boot-${c.name}">
+      <div class="container-icon">${c.icon}</div>
+      <div class="container-name">${c.name}</div>
+      <div class="container-status">${c.desc}</div>
+    </div>
+  `).join('');
+
+  function animateBoot() {
+    if (bootStep >= containers.length + 1) {
+      // All done
+      return;
+    }
+    containers.forEach((c, i) => {
+      const card = document.getElementById(`boot-${c.name}`);
+      if (!card) return;
+      if (i < bootStep) {
+        card.className = 'container-card running';
+        card.querySelector('.container-status').textContent = i === 0 ? 'Exited (0) - 完成' : 'Running';
+      } else if (i === bootStep) {
+        card.className = 'container-card starting';
+        card.querySelector('.container-status').textContent = i === 0 ? '拷贝配置...' : '启动中...';
+      }
+    });
+    bootStep++;
+    setTimeout(animateBoot, 700);
+  }
+
+  setTimeout(animateBoot, 400);
+}
+
+// ===== Copy Code =====
+function copyCode(btn) {
+  const codeBody = btn.closest('.code-block').querySelector('.code-body');
+  const text = codeBody.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '已复制!';
+    setTimeout(() => { btn.textContent = '复制'; }, 1500);
+  });
+}
+
+// ===== Init =====
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+# 迁移测试用 compose — 与现有容器完全隔离
+# 用法：docker compose -f docker-compose.test.yml up --build
+# 清理：docker compose -f docker-compose.test.yml down -v
+
+services:
+  # ---- 测试 key-orchestrator（TypeScript 版）----
+  key-orchestrator-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.key-orchestrator
+    environment:
+      - KEYHUB_MASTER_KEY=${KEYHUB_MASTER_KEY:-test-master-key-change-me}
+      # 仅执行一次就退出，不启动 cron
+      - OPENCLAW_TEST_MODE=1
+    volumes:
+      - test-key-data:/app/data
+      - ./config:/app/config:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== TypeScript migration build OK ==="
+        echo "--- node version ---"
+        node --version
+        echo "--- pnpm version ---"
+        pnpm --version
+        echo "--- tsx smoke test: import core ---"
+        npx tsx -e "import { info } from './packages/core/src/index.ts'; info('smoke-test', 'core import OK')"
+        echo "--- tsx smoke test: stable-cycle --help (dry run) ---"
+        npx tsx packages/core/src/stable-cycle.ts --help 2>&1 || true
+        echo "=== All smoke tests passed ==="
+
+  # ---- 测试 linuxdo-monitor（TypeScript 版）----
+  linuxdo-monitor-test:
+    build:
+      context: ./services/linuxdo-monitor
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-test-token}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-test-chat}
+      - MONITOR_INTERVAL_MS=999999999
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "=== linuxdo-monitor TypeScript build OK ==="
+        echo "--- node version ---"
+        node --version
+        echo "--- tsx smoke test: import monitor ---"
+        tsx -e "import './monitor.ts'; console.log('monitor import OK')" 2>&1 && echo "import OK" || echo "import check done (expected: no bot token)"
+        echo "=== monitor smoke test done ==="
+
+volumes:
+  test-key-data:

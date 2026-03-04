@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw 消息网关实现原理 - 交互式可视化</title>
+  <style>
+    :root {
+      --primary: #26C6DA;
+      --primary-dark: #00ACC1;
+      --blue: #42A5F5;
+      --purple: #7C4DFF;
+      --green: #66BB6A;
+      --orange: #FF9800;
+      --red: #FF7043;
+      --pink: #AB47BC;
+      --gray-100: #F5F5F5;
+      --gray-200: #EEEEEE;
+      --gray-300: #E0E0E0;
+      --gray-500: #9E9E9E;
+      --gray-700: #616161;
+      --gray-900: #212121;
+      --gradient: linear-gradient(135deg, #26C6DA 0%, #42A5F5 50%, #7C4DFF 100%);
+      --code-bg: #1e1e2e;
+      --code-fg: #cdd6f4;
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Microsoft YaHei',sans-serif;background:var(--gray-100);min-height:100vh;color:var(--gray-900)}
+    .dashboard{max-width:1480px;margin:0 auto;padding:14px}
+    .title{text-align:center;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:2em;padding:14px 20px 2px;font-weight:800}
+    .subtitle{text-align:center;color:var(--gray-500);font-size:.92em;margin-bottom:14px}
+    .dashboard-body{display:grid;grid-template-columns:260px 1fr;gap:12px}
+    .card{background:white;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.07);padding:18px}
+
+    /* Sidebar */
+    .sidebar{position:sticky;top:12px;align-self:start;max-height:93vh;overflow-y:auto;padding:14px}
+    .sidebar h3{font-size:.8em;color:var(--gray-500);text-transform:uppercase;letter-spacing:1px;margin:14px 0 8px}
+    .sidebar h3:first-child{margin-top:0}
+    .step-nav{list-style:none}
+    .step-nav li{display:flex;align-items:flex-start;gap:9px;padding:9px 8px;border-radius:8px;cursor:pointer;transition:background .2s;margin-bottom:1px;font-size:.87em;line-height:1.35}
+    .step-nav li:hover{background:var(--gray-100)}
+    .step-nav li.active{background:#E0F7FA;font-weight:600}
+    .step-nav li.completed .dot{background:var(--green)}
+    .step-nav li.active .dot{background:var(--primary);box-shadow:0 0 0 3px rgba(38,198,218,.25)}
+    .dot{width:9px;height:9px;min-width:9px;border-radius:50%;background:var(--gray-300);margin-top:4px;transition:all .3s}
+    .key-hint{margin-top:14px;padding:10px;background:var(--gray-100);border-radius:8px;font-size:.76em;color:var(--gray-500);line-height:1.8}
+    .key-hint kbd{background:white;border:1px solid var(--gray-300);border-radius:4px;padding:1px 5px;font-family:inherit;font-size:.9em}
+
+    /* Main */
+    .main-area{display:flex;flex-direction:column;gap:12px;min-width:0}
+    .diagram-wrap{position:relative;overflow:hidden;min-height:240px;display:flex;align-items:center;justify-content:center}
+    .main-svg{width:100%;height:260px}
+    .svc-label{font-size:12px;font-weight:700;fill:white;text-anchor:middle;pointer-events:none}
+    .svc-sub{font-size:9.5px;fill:rgba(255,255,255,.85);text-anchor:middle;pointer-events:none}
+    .arrow{stroke-width:2;fill:none;transition:all .4s}
+    @keyframes dashFlow{to{stroke-dashoffset:-20}}
+    .flowing{stroke-dasharray:8 4;animation:dashFlow .8s linear infinite}
+
+    /* Step */
+    .step-title-bar{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .step-num{background:var(--primary);color:white;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9em;flex-shrink:0}
+    .step-title-text{font-size:1.15em;font-weight:700}
+    .desc{color:var(--gray-700);line-height:1.75;font-size:.93em;margin-bottom:10px}
+    .desc strong{color:var(--gray-900)}
+
+    /* Code */
+    .code-block{background:var(--code-bg);color:var(--code-fg);border-radius:10px;overflow:hidden;margin:10px 0;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:.82em}
+    .code-hdr{background:#313244;padding:7px 14px;display:flex;align-items:center;justify-content:space-between}
+    .code-hdr span{color:#a6adc8;font-size:.85em}
+    .copy-btn{background:none;border:1px solid #585b70;color:#a6adc8;padding:2px 9px;border-radius:5px;cursor:pointer;font-size:.82em;transition:all .2s}
+    .copy-btn:hover{background:#585b70;color:white}
+    .code-body{padding:12px 14px;overflow-x:auto;line-height:1.7;white-space:pre}
+    .cm{color:#6c7086} .kw{color:#cba6f7} .fn{color:#89b4fa} .str{color:#a6e3a1} .num{color:#fab387} .var{color:#f9e2af} .op{color:#89dceb} .tp{color:#f38ba8}
+    .hl{background:rgba(137,180,250,.1);display:inline-block;width:100%;margin:0 -14px;padding:0 14px}
+
+    /* Info */
+    .info{border-radius:10px;padding:12px 14px;margin:10px 0;font-size:.88em;line-height:1.6;display:flex;gap:10px;align-items:flex-start}
+    .info.tip{background:#E8F5E9;border-left:4px solid var(--green)}
+    .info.warn{background:#FFF8E1;border-left:4px solid var(--orange)}
+    .info.note{background:#E3F2FD;border-left:4px solid var(--blue)}
+    .info.idea{background:#F3E5F5;border-left:4px solid var(--pink)}
+    .info .ico{font-size:1.15em;flex-shrink:0;margin-top:1px}
+
+    /* Table */
+    .tbl{width:100%;border-collapse:collapse;margin:10px 0;font-size:.86em;border-radius:10px;overflow:hidden;border:1px solid var(--gray-200)}
+    .tbl th{background:#f0f4f8;padding:9px 12px;text-align:left;font-weight:600;color:var(--gray-700)}
+    .tbl td{padding:9px 12px;border-top:1px solid var(--gray-200)}
+    .tbl tr:hover td{background:#fafbfc}
+    .tbl code{background:#f0f4f8;padding:1px 5px;border-radius:3px;font-size:.92em}
+
+    /* Lifecycle */
+    .lifecycle{display:flex;align-items:stretch;gap:0;margin:14px 0;overflow-x:auto;padding:8px 0;justify-content:center}
+    .lc-node{flex:0 1 120px;min-width:100px;padding:12px 8px;text-align:center;border-radius:10px;position:relative;transition:all .4s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+    .lc-node .lc-icon{font-size:1.5em}
+    .lc-node .lc-title{font-weight:700;font-size:.82em;color:white}
+    .lc-node .lc-desc{font-size:.7em;color:rgba(255,255,255,.8)}
+    .lc-arrow{display:flex;align-items:center;color:var(--gray-300);font-size:1.3em;min-width:24px;justify-content:center;transition:all .4s}
+    .lc-node.active-lc{transform:scale(1.06);box-shadow:0 4px 16px rgba(0,0,0,.2);z-index:1}
+    .lc-node.dim-lc{opacity:.3}
+    .lc-arrow.dim-lc{opacity:.15}
+
+    /* Tag */
+    .tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:.75em;font-weight:600;margin-left:4px;vertical-align:middle}
+    .tag-lib{background:#E3F2FD;color:#1565C0}
+    .tag-done{background:#E8F5E9;color:#2E7D32}
+
+    /* Controls */
+    .controls-bar{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px;flex-wrap:wrap}
+    .btn{padding:8px 16px;border:none;border-radius:8px;background:var(--primary);color:white;cursor:pointer;font-size:.86em;transition:all .2s;font-weight:500}
+    .btn:hover{opacity:.85;transform:translateY(-1px)}
+    .btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+    .btn-sec{background:var(--gray-500)}
+    .step-ind{font-size:.86em;color:var(--gray-500);font-weight:500;min-width:85px;text-align:center}
+    .prog{width:170px;accent-color:var(--primary)}
+    .spd{padding:6px 8px;border:1px solid var(--gray-300);border-radius:8px;font-size:.82em;background:white;cursor:pointer}
+    @media(max-width:900px){.dashboard-body{grid-template-columns:1fr}.sidebar{position:static;max-height:none}}
+  </style>
+</head>
+<body>
+<div class="dashboard">
+  <h1 class="title">OpenClaw 消息网关实现原理</h1>
+  <p class="subtitle">基于 grammy + @larksuiteoapi 的多渠道 AI 对话平台 | ← → 切换步骤 | 空格键 播放</p>
+  <div class="dashboard-body">
+    <div class="card sidebar">
+      <h3>章节导航</h3>
+      <ul class="step-nav" id="stepNav"></ul>
+      <div class="key-hint"><kbd>←</kbd> <kbd>→</kbd> 切换<br><kbd>Space</kbd> 播放/暂停<br><kbd>Home</kbd> <kbd>End</kbd> 首/末</div>
+    </div>
+    <div class="main-area">
+      <div class="card" id="vizCard"><div class="diagram-wrap" id="vizArea"></div></div>
+      <div class="card" id="stepContent"></div>
+      <div class="card controls-bar">
+        <button class="btn btn-sec" id="prevBtn" onclick="prevStep()">&#9664; 上一步</button>
+        <button class="btn" id="playBtn" onclick="togglePlay()">&#9654; 播放</button>
+        <button class="btn btn-sec" id="nextBtn" onclick="nextStep()">下一步 &#9654;</button>
+        <span class="step-ind" id="stepInd">1/10</span>
+        <input type="range" class="prog" id="progBar" min="0" max="9" value="0" oninput="goToStep(+this.value)">
+        <select class="spd" onchange="setSpeed(+this.value)"><option value="3500">慢速</option><option value="2200" selected>正常</option><option value="1000">快速</option></select>
+        <button class="btn btn-sec" onclick="goToStep(0)">&#x27F2; 重置</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const S = `
+<defs>
+  <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#9E9E9E"/></marker>
+  <marker id="ahc" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#26C6DA"/></marker>
+  <marker id="ahg" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#66BB6A"/></marker>
+  <marker id="aho" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#FF9800"/></marker>
+  <filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity=".12"/></filter>
+</defs>`;
+
+const STEPS = [
+  // 0 - Real Architecture
+  {
+    nav: '真实架构总览',
+    title: '系统全景：两个项目如何协作',
+    viz() {
+      return `<svg viewBox="0 0 880 280" class="main-svg" style="height:280px">${S}
+        <!-- openclaw 主程序 -->
+        <rect x="160" y="12" width="420" height="250" rx="14" fill="none" stroke="#7C4DFF" stroke-width="2.5"/>
+        <text x="370" y="6" font-size="12" font-weight="800" fill="#7C4DFF" text-anchor="middle">openclaw 主程序（插件架构）</text>
+        <!-- Plugins -->
+        <rect x="180" y="30" width="100" height="50" rx="8" fill="#42A5F5" filter="url(#sh)"/>
+        <text x="230" y="53" class="svc-label" style="font-size:10px">Telegram</text>
+        <text x="230" y="68" class="svc-sub">grammy</text>
+        <rect x="180" y="92" width="100" height="50" rx="8" fill="#AB47BC" filter="url(#sh)"/>
+        <text x="230" y="115" class="svc-label" style="font-size:10px">飞书 / Lark</text>
+        <text x="230" y="130" class="svc-sub">@larksuiteoapi</text>
+        <rect x="180" y="154" width="100" height="44" rx="8" fill="#78909C" filter="url(#sh)"/>
+        <text x="230" y="175" class="svc-label" style="font-size:10px">Slack/Discord/...</text>
+        <text x="230" y="190" class="svc-sub">40+ 渠道</text>
+        <!-- Core -->
+        <rect x="310" y="35" width="120" height="42" rx="8" fill="#7C4DFF" filter="url(#sh)"/>
+        <text x="370" y="55" class="svc-label" style="font-size:10px">Plugin Router</text>
+        <text x="370" y="68" class="svc-sub">消息路由 + 会话管理</text>
+        <rect x="310" y="92" width="120" height="42" rx="8" fill="#FF7043" filter="url(#sh)"/>
+        <text x="370" y="112" class="svc-label" style="font-size:10px">Agent / LLM</text>
+        <text x="370" y="125" class="svc-sub">多 Provider 调用</text>
+        <rect x="310" y="150" width="120" height="42" rx="8" fill="#66BB6A" filter="url(#sh)"/>
+        <text x="370" y="170" class="svc-label" style="font-size:10px">Config Loader</text>
+        <text x="370" y="183" class="svc-sub">openclaw.json</text>
+        <!-- Streaming -->
+        <rect x="460" y="60" width="100" height="75" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="510" y="85" class="svc-label" style="font-size:10px">Streaming</text>
+        <text x="510" y="100" class="svc-sub">流式回复</text>
+        <text x="510" y="115" class="svc-sub">Draft 编辑</text>
+        <!-- History -->
+        <rect x="460" y="155" width="100" height="40" rx="8" fill="#26C6DA" filter="url(#sh)"/>
+        <text x="510" y="177" class="svc-label" style="font-size:10px">Session</text>
+        <text x="510" y="190" class="svc-sub">对话历史</text>
+        <!-- Arrows inside -->
+        <line x1="280" y1="55" x2="308" y2="55" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="280" y1="117" x2="308" y2="113" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="430" y1="113" x2="458" y2="100" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="430" y1="170" x2="458" y2="170" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+
+        <!-- Users left -->
+        <rect x="10" y="40" width="105" height="45" rx="8" fill="#0088CC" filter="url(#sh)"/>
+        <text x="62" y="62" class="svc-label">Telegram</text>
+        <text x="62" y="75" class="svc-sub">用户消息</text>
+        <rect x="10" y="100" width="105" height="45" rx="8" fill="#3370FF" filter="url(#sh)"/>
+        <text x="62" y="122" class="svc-label">飞书</text>
+        <text x="62" y="135" class="svc-sub">用户消息</text>
+        <line x1="115" y1="62" x2="178" y2="55" stroke="#42A5F5" stroke-width="2" marker-end="url(#ahc)" class="flowing"/>
+        <line x1="115" y1="122" x2="178" y2="117" stroke="#AB47BC" stroke-width="2" marker-end="url(#ahc)" class="flowing"/>
+
+        <!-- LLM APIs right -->
+        <rect x="620" y="40" width="115" height="42" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="677" y="60" class="svc-label" style="font-size:10px">OpenAI / Claude</text>
+        <text x="677" y="73" class="svc-sub">LLM API</text>
+        <line x1="560" y1="97" x2="618" y2="65" stroke="#FF7043" stroke-width="2" marker-end="url(#aho)" class="flowing"/>
+
+        <!-- claw / key-orchestrator bottom -->
+        <rect x="615" y="130" width="250" height="130" rx="12" fill="none" stroke="#66BB6A" stroke-width="2" stroke-dasharray="5 3"/>
+        <text x="740" y="124" font-size="11" font-weight="700" fill="#2E7D32" text-anchor="middle">claw 辅助管线</text>
+        <rect x="635" y="145" width="105" height="42" rx="8" fill="#66BB6A" filter="url(#sh)"/>
+        <text x="687" y="164" class="svc-label" style="font-size:9px">Key Orchestrator</text>
+        <text x="687" y="178" class="svc-sub">同步 Key</text>
+        <rect x="755" y="145" width="95" height="42" rx="8" fill="#78909C" filter="url(#sh)"/>
+        <text x="802" y="164" class="svc-label" style="font-size:9px">Monitor</text>
+        <text x="802" y="178" class="svc-sub">LinuxDo 福利</text>
+        <rect x="635" y="200" width="105" height="42" rx="8" fill="#FFA726" filter="url(#sh)"/>
+        <text x="687" y="218" class="svc-label" style="font-size:9px">openclaw.json</text>
+        <text x="687" y="232" class="svc-sub">共享配置</text>
+        <line x1="687" y1="187" x2="687" y2="198" stroke="#66BB6A" stroke-width="1.5" marker-end="url(#ahg)"/>
+        <!-- config → openclaw -->
+        <line x1="635" y1="221" x2="432" y2="175" stroke="#FFA726" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#aho)"/>
+        <text x="540" y="194" font-size="9" fill="#E65100" text-anchor="middle">读取 Key</text>
+      </svg>`;
+    },
+    content: `
+      <p class="desc">OpenClaw 的消息网关<strong>不是</strong> <code>claw/gateway/</code>（那只是一个占位 stub）。
+      真正处理 Telegram/飞书消息的是<strong>独立的 openclaw 主程序</strong>，一个基于<strong>插件架构</strong>的多渠道 AI 对话平台。</p>
+      <table class="tbl">
+        <tr><th>项目</th><th>职责</th><th>技术栈</th></tr>
+        <tr><td><strong style="color:#7C4DFF">openclaw 主程序</strong></td><td>接收消息 → Agent → 调 LLM → 流式回复</td><td>TypeScript + grammy + @larksuiteoapi</td></tr>
+        <tr><td><strong style="color:#66BB6A">claw/key-orchestrator</strong></td><td>从 new-api 站点同步 Key → 写入 openclaw.json</td><td>TypeScript strict + pnpm + Zod + tslog</td></tr>
+        <tr><td><strong style="color:#78909C">claw/monitor</strong></td><td>监控 LinuxDo 福利 → 推送 Telegram</td><td>TypeScript ESM + tsx</td></tr>
+        <tr><td><strong style="color:#9E9E9E">claw/gateway (stub)</strong></td><td>Docker 健康检查占位，未来可能实现独立网关</td><td>Node.js HTTP</td></tr>
+      </table>
+      <div class="info idea">
+        <span class="ico">&#128273;</span>
+        <div><strong>两个项目的桥梁：</strong><code>openclaw.json</code> 配置文件。Key Orchestrator 写入最新的 API Key，
+        openclaw 主程序读取并用它调用 LLM。通过<strong>共享文件</strong>解耦，零 RPC。</div>
+      </div>`
+  },
+  // 1 - Plugin Architecture
+  {
+    nav: '插件架构',
+    title: '插件系统：40+ 渠道的统一抽象',
+    viz() {
+      return `<svg viewBox="0 0 860 250" class="main-svg" style="height:250px">${S}
+        <!-- Plugin Host -->
+        <rect x="300" y="10" width="260" height="230" rx="14" fill="none" stroke="#7C4DFF" stroke-width="2"/>
+        <text x="430" y="4" font-size="11" font-weight="700" fill="#7C4DFF" text-anchor="middle">OpenClaw Plugin Host</text>
+        <rect x="320" y="28" width="100" height="35" rx="6" fill="#7C4DFF" filter="url(#sh)"/>
+        <text x="370" y="49" class="svc-label" style="font-size:10px">Plugin API</text>
+        <rect x="440" y="28" width="100" height="35" rx="6" fill="#FF7043" filter="url(#sh)"/>
+        <text x="490" y="49" class="svc-label" style="font-size:10px">Agent Runtime</text>
+        <rect x="320" y="78" width="220" height="35" rx="6" fill="#26C6DA" filter="url(#sh)"/>
+        <text x="430" y="99" class="svc-label" style="font-size:10px">Channel Registry — registerChannel()</text>
+        <rect x="320" y="128" width="220" height="35" rx="6" fill="#FF9800" filter="url(#sh)"/>
+        <text x="430" y="149" class="svc-label" style="font-size:10px">Tool Registry — registerTools()</text>
+        <rect x="320" y="180" width="220" height="42" rx="6" fill="#66BB6A" filter="url(#sh)"/>
+        <text x="430" y="200" class="svc-label" style="font-size:10px">Gateway Lifecycle</text>
+        <text x="430" y="214" class="svc-sub">start() / stop() / probe()</text>
+
+        <!-- Extensions left -->
+        <rect x="30" y="25" width="220" height="42" rx="8" fill="#42A5F5" filter="url(#sh)"/>
+        <text x="140" y="44" class="svc-label">extensions/telegram/</text>
+        <text x="140" y="58" class="svc-sub">grammy + @grammyjs/runner</text>
+        <rect x="30" y="80" width="220" height="42" rx="8" fill="#AB47BC" filter="url(#sh)"/>
+        <text x="140" y="99" class="svc-label">extensions/feishu/</text>
+        <text x="140" y="113" class="svc-sub">@larksuiteoapi/node-sdk</text>
+        <rect x="30" y="135" width="220" height="42" rx="8" fill="#5865F2" filter="url(#sh)"/>
+        <text x="140" y="154" class="svc-label">extensions/slack/</text>
+        <text x="140" y="168" class="svc-sub">@slack/bolt</text>
+        <rect x="30" y="190" width="220" height="42" rx="8" fill="#78909C" filter="url(#sh)"/>
+        <text x="140" y="209" class="svc-label">extensions/discord/ ...</text>
+        <text x="140" y="223" class="svc-sub">40+ 渠道插件</text>
+
+        <!-- Arrows -->
+        <line x1="250" y1="46" x2="318" y2="43" stroke="#42A5F5" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="250" y1="101" x2="318" y2="93" stroke="#AB47BC" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="250" y1="156" x2="318" y2="135" stroke="#5865F2" stroke-width="2" marker-end="url(#ah)"/>
+        <line x1="250" y1="211" x2="318" y2="190" stroke="#78909C" stroke-width="2" marker-end="url(#ah)"/>
+
+        <!-- Register call -->
+        <text x="284" y="38" font-size="8" fill="#42A5F5" text-anchor="middle">register()</text>
+
+        <!-- Right: what plugins provide -->
+        <rect x="610" y="30" width="200" height="200" rx="10" fill="#FAFAFA" stroke="var(--gray-300)"/>
+        <text x="710" y="50" font-size="10" font-weight="700" fill="var(--gray-700)" text-anchor="middle">ChannelPlugin 接口</text>
+        <text x="625" y="72" font-size="10" fill="var(--gray-700)">&#8226; capabilities  (功能声明)</text>
+        <text x="625" y="92" font-size="10" fill="var(--gray-700)">&#8226; config  (账号解析)</text>
+        <text x="625" y="112" font-size="10" fill="var(--gray-700)">&#8226; security  (权限策略)</text>
+        <text x="625" y="132" font-size="10" fill="var(--gray-700)">&#8226; messaging  (收发消息)</text>
+        <text x="625" y="152" font-size="10" fill="var(--gray-700)">&#8226; gateway  (生命周期)</text>
+        <text x="625" y="172" font-size="10" fill="var(--gray-700)">&#8226; status  (健康检查)</text>
+        <text x="625" y="200" font-size="10" fill="var(--gray-700)">&#8226; tools  (飞书文档等)</text>
+        <line x1="560" y1="130" x2="608" y2="130" stroke="var(--gray-300)" stroke-width="1.5" marker-end="url(#ah)"/>
+      </svg>`;
+    },
+    content: `
+      <p class="desc">openclaw 的核心是一个<strong>插件系统</strong>。每个聊天平台（Telegram、飞书、Slack、Discord...）都是一个独立的<strong>Channel Plugin</strong>，
+      通过统一的 <code>ChannelPlugin</code> 接口注册到 Plugin Host。</p>
+      <div class="code-block">
+        <div class="code-hdr"><span>extensions/telegram/index.ts — 插件注册</span></div>
+        <div class="code-body"><span class="kw">const</span> plugin = {
+  <span class="var">id</span>: <span class="str">"telegram"</span>,
+  <span class="fn">register</span>(api: <span class="tp">OpenClawPluginApi</span>) {
+<span class="hl">    <span class="fn">setTelegramRuntime</span>(api.<span class="var">runtime</span>);         <span class="cm">// 保存 runtime 引用</span></span>
+<span class="hl">    api.<span class="fn">registerChannel</span>({ plugin: telegramPlugin }); <span class="cm">// 注册为渠道</span></span>
+  }
+};</div>
+      </div>
+      <div class="code-block">
+        <div class="code-hdr"><span>extensions/feishu/index.ts — 飞书插件注册（含工具）</span></div>
+        <div class="code-body"><span class="kw">const</span> plugin = {
+  <span class="var">id</span>: <span class="str">"feishu"</span>,
+  <span class="fn">register</span>(api: <span class="tp">OpenClawPluginApi</span>) {
+    <span class="fn">setFeishuRuntime</span>(api.<span class="var">runtime</span>);
+    api.<span class="fn">registerChannel</span>({ plugin: feishuPlugin });
+<span class="hl">    <span class="fn">registerFeishuDocTools</span>(api);    <span class="cm">// 注册飞书文档工具</span></span>
+<span class="hl">    <span class="fn">registerFeishuWikiTools</span>(api);   <span class="cm">// 注册飞书 Wiki 工具</span></span>
+<span class="hl">    <span class="fn">registerFeishuChatTools</span>(api);   <span class="cm">// 注册飞书群聊工具</span></span>
+  }
+};</div>
+      </div>
+      <div class="info tip">
+        <span class="ico">&#128161;</span>
+        <div><strong>设计思想：</strong>新增一个渠道只需写一个 extension 插件，实现 <code>ChannelPlugin</code> 接口即可。
+        核心的 Agent、LLM 调用、会话管理全部复用，<strong>零改动</strong>。飞书插件还额外注册了文档/Wiki 工具，让 AI 能直接操作飞书文档。</div>
+      </div>`
+  },
+  // 2 - Telegram Deep Dive
+  {
+    nav: 'Telegram 实现',
+    title: 'Telegram：grammy + Long Polling',
+    viz() {
+      return `<svg viewBox="0 0 860 240" class="main-svg" style="height:240px">${S}
+        <rect x="10" y="80" width="100" height="55" rx="8" fill="#0088CC" filter="url(#sh)"/>
+        <text x="60" y="105" class="svc-label">Telegram</text>
+        <text x="60" y="120" class="svc-sub">Bot API</text>
+        <!-- grammy -->
+        <rect x="155" y="20" width="200" height="200" rx="12" fill="none" stroke="#42A5F5" stroke-width="2"/>
+        <text x="255" y="14" font-size="11" font-weight="700" fill="#1565C0" text-anchor="middle">Telegram Extension</text>
+        <rect x="175" y="32" width="80" height="35" rx="6" fill="#29B6F6" filter="url(#sh)"/>
+        <text x="215" y="52" class="svc-label" style="font-size:9px">monitor.ts</text>
+        <text x="215" y="62" class="svc-sub">Polling 循环</text>
+        <rect x="265" y="32" width="75" height="35" rx="6" fill="#29B6F6" filter="url(#sh)"/>
+        <text x="302" y="52" class="svc-label" style="font-size:9px">bot.ts</text>
+        <text x="302" y="62" class="svc-sub">grammy Bot</text>
+        <rect x="175" y="80" width="165" height="35" rx="6" fill="#42A5F5" filter="url(#sh)"/>
+        <text x="257" y="100" class="svc-label" style="font-size:9px">bot-message-context.ts</text>
+        <text x="257" y="112" class="svc-sub">构建统一消息上下文</text>
+        <rect x="175" y="128" width="165" height="35" rx="6" fill="#1E88E5" filter="url(#sh)"/>
+        <text x="257" y="148" class="svc-label" style="font-size:9px">bot-message-dispatch.ts</text>
+        <text x="257" y="160" class="svc-sub">调 Agent → 流式回复</text>
+        <rect x="175" y="176" width="165" height="35" rx="6" fill="#1565C0" filter="url(#sh)"/>
+        <text x="257" y="196" class="svc-label" style="font-size:9px">delivery.replies.ts</text>
+        <text x="257" y="208" class="svc-sub">sendMessage / editMessage</text>
+
+        <!-- Arrows -->
+        <line x1="110" y1="107" x2="173" y2="50" stroke="#0088CC" stroke-width="2" marker-end="url(#ahc)" class="flowing"/>
+        <text x="138" y="70" font-size="8" fill="#0088CC">getUpdates</text>
+        <line x1="255" y1="67" x2="255" y2="78" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="255" y1="115" x2="255" y2="126" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="255" y1="163" x2="255" y2="174" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+
+        <!-- Agent -->
+        <rect x="410" y="80" width="120" height="50" rx="8" fill="#7C4DFF" filter="url(#sh)"/>
+        <text x="470" y="103" class="svc-label" style="font-size:10px">Agent Runtime</text>
+        <text x="470" y="118" class="svc-sub">dispatchReply()</text>
+        <line x1="340" y1="145" x2="408" y2="107" stroke="#7C4DFF" stroke-width="2" marker-end="url(#ah)"/>
+
+        <!-- LLM -->
+        <rect x="580" y="40" width="120" height="42" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="640" y="60" class="svc-label" style="font-size:10px">LLM Provider</text>
+        <text x="640" y="73" class="svc-sub">OpenAI / Claude</text>
+        <line x1="530" y1="97" x2="578" y2="68" stroke="#FF9800" stroke-width="2" marker-end="url(#aho)" class="flowing"/>
+
+        <!-- Stream back -->
+        <rect x="580" y="110" width="120" height="42" rx="8" fill="#FF7043" filter="url(#sh)"/>
+        <text x="640" y="130" class="svc-label" style="font-size:10px">Stream Chunks</text>
+        <text x="640" y="143" class="svc-sub">流式返回</text>
+        <line x1="640" y1="82" x2="640" y2="108" stroke="#FF7043" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="580" y1="135" x2="342" y2="190" stroke="#1565C0" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#ah)"/>
+        <text x="480" y="175" font-size="8" fill="#1565C0" text-anchor="middle">流式编辑消息</text>
+
+        <!-- Deps -->
+        <rect x="580" y="180" width="100" height="28" rx="5" fill="#E3F2FD" stroke="#90CAF9"/>
+        <text x="630" y="198" font-size="9" fill="#1565C0" text-anchor="middle" font-weight="600">grammy v1.41</text>
+        <rect x="700" y="180" width="120" height="28" rx="5" fill="#E3F2FD" stroke="#90CAF9"/>
+        <text x="760" y="198" font-size="9" fill="#1565C0" text-anchor="middle" font-weight="600">@grammyjs/runner</text>
+      </svg>`;
+    },
+    content: `
+      <p class="desc">Telegram 集成使用 <strong>grammy</strong>（v1.41）框架，通过 <strong>Long Polling</strong> 拉取消息（不需要公网 IP）：</p>
+      <div class="code-block">
+        <div class="code-hdr"><span>src/telegram/bot.ts — 创建 Bot 实例</span></div>
+        <div class="code-body"><span class="kw">import</span> { <span class="fn">Bot</span> } <span class="kw">from</span> <span class="str">"grammy"</span>;
+<span class="kw">import</span> { <span class="fn">apiThrottler</span> } <span class="kw">from</span> <span class="str">"@grammyjs/transformer-throttler"</span>;
+
+<span class="kw">export function</span> <span class="fn">createTelegramBot</span>(opts: <span class="tp">TelegramBotOptions</span>) {
+  <span class="kw">const</span> bot = <span class="kw">new</span> <span class="fn">Bot</span>(opts.<span class="var">token</span>);
+<span class="hl">  bot.api.config.<span class="fn">use</span>(<span class="fn">apiThrottler</span>());  <span class="cm">// API 限流保护</span></span>
+  bot.<span class="fn">catch</span>((err) => runtime.<span class="fn">error</span>(<span class="str">"Bot error"</span>, err));
+  <span class="cm">// ... 去重、顺序化、中间件</span>
+  <span class="kw">return</span> bot;
+}</div>
+      </div>
+      <table class="tbl">
+        <tr><th>文件</th><th>职责</th></tr>
+        <tr><td><code>monitor.ts</code></td><td>启动 <code>@grammyjs/runner</code> Polling 循环，处理 offset 持久化</td></tr>
+        <tr><td><code>bot.ts</code></td><td>创建 grammy Bot、注册中间件（去重、顺序化、限流）</td></tr>
+        <tr><td><code>bot-message-context.ts</code></td><td>从 Telegram Update 提取 sender/chat/media → 统一消息格式</td></tr>
+        <tr><td><code>bot-message-dispatch.ts</code></td><td>调用 Agent + LLM，创建 Draft Stream，流式 chunk 回写</td></tr>
+        <tr><td><code>delivery.replies.ts</code></td><td>通过 <code>sendMessage</code> / <code>editMessage</code> 投递流式回复</td></tr>
+      </table>
+      <div class="info note">
+        <span class="ico">&#128269;</span>
+        <div><strong>流式回复原理：</strong>LLM 返回 stream chunk 时，Gateway 先 <code>sendMessage</code> 发一条占位消息，
+        然后随着 chunk 到达不断 <code>editMessage</code> 更新内容，实现"打字机"效果。超过 4000 字自动分段发送新消息。</div>
+      </div>`
+  },
+  // 3 - Feishu Deep Dive
+  {
+    nav: '飞书实现',
+    title: '飞书：@larksuiteoapi + WebSocket',
+    viz() {
+      return `<svg viewBox="0 0 860 240" class="main-svg" style="height:240px">${S}
+        <rect x="10" y="80" width="100" height="55" rx="8" fill="#3370FF" filter="url(#sh)"/>
+        <text x="60" y="105" class="svc-label">飞书 / Lark</text>
+        <text x="60" y="120" class="svc-sub">Event Push</text>
+        <rect x="155" y="12" width="210" height="216" rx="12" fill="none" stroke="#AB47BC" stroke-width="2"/>
+        <text x="260" y="6" font-size="11" font-weight="700" fill="#7B1FA2" text-anchor="middle">Feishu Extension</text>
+        <rect x="175" y="25" width="85" height="35" rx="6" fill="#CE93D8" filter="url(#sh)"/>
+        <text x="217" y="45" class="svc-label" style="font-size:9px">monitor.ts</text>
+        <text x="217" y="55" class="svc-sub">WS / Webhook</text>
+        <rect x="270" y="25" width="80" height="35" rx="6" fill="#CE93D8" filter="url(#sh)"/>
+        <text x="310" y="45" class="svc-label" style="font-size:9px">client.ts</text>
+        <text x="310" y="55" class="svc-sub">SDK Client</text>
+        <rect x="175" y="75" width="175" height="35" rx="6" fill="#AB47BC" filter="url(#sh)"/>
+        <text x="262" y="95" class="svc-label" style="font-size:9px">bot.ts (1200+ 行)</text>
+        <text x="262" y="107" class="svc-sub">消息解析 / @提及 / 群策略</text>
+        <rect x="175" y="125" width="80" height="35" rx="6" fill="#9C27B0" filter="url(#sh)"/>
+        <text x="215" y="145" class="svc-label" style="font-size:9px">send.ts</text>
+        <text x="215" y="157" class="svc-sub">发消息</text>
+        <rect x="265" y="125" width="85" height="35" rx="6" fill="#9C27B0" filter="url(#sh)"/>
+        <text x="307" y="145" class="svc-label" style="font-size:9px">cards.ts</text>
+        <text x="307" y="157" class="svc-sub">卡片消息</text>
+        <rect x="175" y="175" width="175" height="42" rx="6" fill="#7B1FA2" filter="url(#sh)"/>
+        <text x="262" y="195" class="svc-label" style="font-size:9px">Tools: 文档 / Wiki / 群聊</text>
+        <text x="262" y="209" class="svc-sub">registerFeishuDocTools() ...</text>
+
+        <line x1="110" y1="107" x2="173" y2="50" stroke="#3370FF" stroke-width="2" marker-end="url(#ahc)" class="flowing"/>
+        <text x="138" y="70" font-size="8" fill="#3370FF">WebSocket</text>
+        <line x1="260" y1="60" x2="260" y2="73" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="260" y1="110" x2="260" y2="123" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+
+        <!-- Agent -->
+        <rect x="415" y="75" width="120" height="50" rx="8" fill="#7C4DFF" filter="url(#sh)"/>
+        <text x="475" y="98" class="svc-label" style="font-size:10px">Agent Runtime</text>
+        <text x="475" y="113" class="svc-sub">dispatchReply()</text>
+        <line x1="350" y1="92" x2="413" y2="95" stroke="#7C4DFF" stroke-width="2" marker-end="url(#ah)"/>
+
+        <rect x="415" y="150" width="120" height="50" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="475" y="173" class="svc-label" style="font-size:10px">LLM Provider</text>
+        <text x="475" y="188" class="svc-sub">OpenAI / Claude</text>
+        <line x1="475" y1="125" x2="475" y2="148" stroke="#FF9800" stroke-width="1.5" marker-end="url(#aho)"/>
+
+        <!-- Features -->
+        <rect x="590" y="25" width="200" height="200" rx="10" fill="#FAFAFA" stroke="var(--gray-300)"/>
+        <text x="690" y="45" font-size="10" font-weight="700" fill="var(--gray-700)" text-anchor="middle">飞书特色功能</text>
+        <text x="605" y="68" font-size="10" fill="var(--gray-700)">&#9989; WebSocket 实时推送</text>
+        <text x="605" y="88" font-size="10" fill="var(--gray-700)">&#9989; 卡片消息 + 交互按钮</text>
+        <text x="605" y="108" font-size="10" fill="var(--gray-700)">&#9989; @提及才触发（群聊）</text>
+        <text x="605" y="128" font-size="10" fill="var(--gray-700)">&#9989; Thread 话题回复</text>
+        <text x="605" y="148" font-size="10" fill="var(--gray-700)">&#9989; 表情回应（Reaction）</text>
+        <text x="605" y="168" font-size="10" fill="var(--gray-700)">&#9989; AI 操作飞书文档/Wiki</text>
+        <text x="605" y="188" font-size="10" fill="var(--gray-700)">&#9989; 多账号并行</text>
+        <text x="605" y="210" font-size="10" fill="var(--gray-700)">&#9989; DM/Group 独立策略</text>
+      </svg>`;
+    },
+    content: `
+      <p class="desc">飞书集成使用<strong>官方 @larksuiteoapi/node-sdk</strong>（v1.59），支持 <strong>WebSocket</strong> 和 Webhook 两种连接模式：</p>
+      <div class="code-block">
+        <div class="code-hdr"><span>extensions/feishu/src/send.ts — 发送消息</span></div>
+        <div class="code-body"><span class="kw">import</span> { <span class="fn">createFeishuClient</span> } <span class="kw">from</span> <span class="str">"./client"</span>;
+
+<span class="kw">export async function</span> <span class="fn">sendMessageFeishu</span>(params) {
+  <span class="kw">const</span> client = <span class="fn">createFeishuClient</span>(account);
+<span class="hl">  <span class="kw">const</span> response = <span class="kw">await</span> client.<span class="var">im</span>.<span class="var">message</span>.<span class="fn">create</span>({</span>
+    <span class="var">path</span>: { <span class="var">chat_id</span>: target },
+    <span class="var">data</span>: { <span class="var">msg_type</span>: <span class="str">"text"</span>, <span class="var">content</span>: ... }
+  });
+  <span class="kw">return</span> <span class="fn">toFeishuSendResult</span>(response);
+}</div>
+      </div>
+      <div class="info idea">
+        <span class="ico">&#128296;</span>
+        <div><strong>bot.ts 有 1200+ 行：</strong>飞书的消息类型比 Telegram 复杂得多 —— 需要处理 @提及解析、卡片交互回调、
+        权限申请 URL 生成、群策略（<code>requireMention</code>）、撤回消息重试等。这也是为什么飞书插件额外注册了文档/Wiki 操作工具。</div>
+      </div>`
+  },
+  // 4 - Message Lifecycle
+  {
+    nav: '消息生命周期',
+    title: '一条消息的完整旅程',
+    viz: 'lifecycle',
+    content: `
+      <p class="desc">无论从 Telegram 还是飞书进来，消息在 openclaw 内部经历 <strong>7 个阶段</strong>（上方动画自动播放）：</p>
+      <table class="tbl">
+        <tr><th>#</th><th>阶段</th><th>关键函数</th></tr>
+        <tr><td>1</td><td>接收</td><td>grammy <code>getUpdates</code> / Feishu WebSocket event</td></tr>
+        <tr><td>2</td><td>去重</td><td>Update ID / Message ID 去重，防止重复处理</td></tr>
+        <tr><td>3</td><td>上下文</td><td><code>buildMessageContext()</code> → 统一格式</td></tr>
+        <tr><td>4</td><td>会话</td><td>按 sessionKey 加载对话历史</td></tr>
+        <tr><td>5</td><td>Agent</td><td><code>dispatchReplyWithBufferedBlockDispatcher()</code></td></tr>
+        <tr><td>6</td><td>LLM</td><td>调用 OpenAI/Claude API，streaming 返回</td></tr>
+        <tr><td>7</td><td>回复</td><td><code>sendMessage</code> + <code>editMessage</code> 流式投递</td></tr>
+      </table>`
+  },
+  // 5 - LLM Integration
+  {
+    nav: 'LLM 多 Provider',
+    title: '多模型 Provider：OpenAI / Claude / Gemini',
+    viz() {
+      return `<svg viewBox="0 0 860 220" class="main-svg" style="height:220px">${S}
+        <rect x="20" y="70" width="120" height="55" rx="8" fill="#7C4DFF" filter="url(#sh)"/>
+        <text x="80" y="93" class="svc-label" style="font-size:10px">Agent Runtime</text>
+        <text x="80" y="108" class="svc-sub">已构建 Prompt</text>
+
+        <rect x="195" y="20" width="260" height="180" rx="12" fill="none" stroke="#FF7043" stroke-width="2"/>
+        <text x="325" y="14" font-size="11" font-weight="700" fill="#E64A19" text-anchor="middle">Model Selection + Provider Dispatch</text>
+        <rect x="215" y="35" width="110" height="30" rx="6" fill="#FF8A65" filter="url(#sh)"/>
+        <text x="270" y="54" class="svc-label" style="font-size:9px">resolveModel()</text>
+        <rect x="340" y="35" width="100" height="30" rx="6" fill="#FF8A65" filter="url(#sh)"/>
+        <text x="390" y="54" class="svc-label" style="font-size:9px">selectProvider()</text>
+        <rect x="215" y="80" width="225" height="30" rx="6" fill="#FF7043" filter="url(#sh)"/>
+        <text x="327" y="99" class="svc-label" style="font-size:9px">dispatchReplyWithBufferedBlockDispatcher()</text>
+        <rect x="215" y="125" width="110" height="30" rx="6" fill="#FF5722" filter="url(#sh)"/>
+        <text x="270" y="144" class="svc-label" style="font-size:9px">Stream Chunks</text>
+        <rect x="340" y="125" width="100" height="30" rx="6" fill="#FF5722" filter="url(#sh)"/>
+        <text x="390" y="144" class="svc-label" style="font-size:9px">History Save</text>
+        <rect x="215" y="168" width="225" height="25" rx="5" fill="#FFAB91" filter="url(#sh)"/>
+        <text x="327" y="185" class="svc-label" style="font-size:9px;fill:#BF360C">Tool Use / Function Calling</text>
+
+        <line x1="140" y1="97" x2="213" y2="95" stroke="#7C4DFF" stroke-width="2" marker-end="url(#ah)" class="flowing"/>
+        <line x1="325" y1="65" x2="325" y2="78" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="325" y1="110" x2="325" y2="123" stroke="#9E9E9E" stroke-width="1.5" marker-end="url(#ah)"/>
+
+        <!-- Providers -->
+        <rect x="520" y="25" width="130" height="38" rx="8" fill="#10A37F" filter="url(#sh)"/>
+        <text x="585" y="44" class="svc-label" style="font-size:10px">OpenAI</text>
+        <text x="585" y="56" class="svc-sub">GPT-4o / o1</text>
+        <rect x="520" y="75" width="130" height="38" rx="8" fill="#D97706" filter="url(#sh)"/>
+        <text x="585" y="94" class="svc-label" style="font-size:10px">Anthropic</text>
+        <text x="585" y="106" class="svc-sub">Claude Opus / Sonnet</text>
+        <rect x="520" y="125" width="130" height="38" rx="8" fill="#4285F4" filter="url(#sh)"/>
+        <text x="585" y="144" class="svc-label" style="font-size:10px">Google</text>
+        <text x="585" y="156" class="svc-sub">Gemini 2.5</text>
+        <rect x="520" y="175" width="130" height="38" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="585" y="194" class="svc-label" style="font-size:10px">第三方中转</text>
+        <text x="585" y="206" class="svc-sub">new-api 站点</text>
+
+        <line x1="455" y1="95" x2="518" y2="45" stroke="#10A37F" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="455" y1="95" x2="518" y2="94" stroke="#D97706" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="455" y1="95" x2="518" y2="140" stroke="#4285F4" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="455" y1="95" x2="518" y2="190" stroke="#FF9800" stroke-width="1.5" marker-end="url(#ah)"/>
+
+        <!-- Key source -->
+        <rect x="710" y="130" width="120" height="42" rx="8" fill="#66BB6A" filter="url(#sh)"/>
+        <text x="770" y="150" class="svc-label" style="font-size:9px">Key Orchestrator</text>
+        <text x="770" y="163" class="svc-sub">同步 Key → json</text>
+        <line x1="710" y1="194" x2="652" y2="198" stroke="#66BB6A" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ahg)"/>
+      </svg>`;
+    },
+    content: `
+      <p class="desc">openclaw 不绑死单一 LLM，通过 <strong>Provider 抽象层</strong>支持多家模型切换：</p>
+      <table class="tbl">
+        <tr><th>Provider</th><th>模型示例</th><th>Key 来源</th></tr>
+        <tr><td><strong style="color:#10A37F">OpenAI</strong></td><td>gpt-4o, o1</td><td>手动配置 / Key Orchestrator 同步</td></tr>
+        <tr><td><strong style="color:#D97706">Anthropic</strong></td><td>Claude Opus 4, Sonnet</td><td>手动配置</td></tr>
+        <tr><td><strong style="color:#4285F4">Google</strong></td><td>Gemini 2.5 Pro/Flash</td><td>手动配置</td></tr>
+        <tr><td><strong style="color:#FF9800">第三方 new-api</strong></td><td>兼容 OpenAI 协议</td><td>Key Orchestrator 从站点自动同步</td></tr>
+      </table>
+      <div class="info tip">
+        <span class="ico">&#128260;</span>
+        <div><strong>Provider Fallback：</strong>如果主 Provider 调用失败（限流/超时），Agent 可以按优先级自动切换到备用 Provider。
+        Key Orchestrator 定时检测各 Key 健康状态并更新 <code>openclaw.json</code>。</div>
+      </div>`
+  },
+  // 6 - Config System
+  {
+    nav: '配置系统',
+    title: 'openclaw.json：从加载到热更新',
+    viz() {
+      return `<svg viewBox="0 0 860 220" class="main-svg" style="height:220px">${S}
+        <rect x="20" y="30" width="130" height="50" rx="8" fill="#66BB6A" filter="url(#sh)"/>
+        <text x="85" y="53" class="svc-label" style="font-size:10px">Key Orchestrator</text>
+        <text x="85" y="68" class="svc-sub">claw 项目</text>
+        <rect x="20" y="110" width="130" height="42" rx="8" fill="#78909C" filter="url(#sh)"/>
+        <text x="85" y="130" class="svc-label" style="font-size:10px">.env</text>
+        <text x="85" y="143" class="svc-sub">环境变量</text>
+
+        <rect x="200" y="15" width="230" height="190" rx="12" fill="#FFF8E1" stroke="#FFA726" stroke-width="1.5"/>
+        <text x="315" y="35" font-size="11" font-weight="700" fill="#E65100" text-anchor="middle">openclaw.json</text>
+        <text x="215" y="58" font-size="10" fill="#BF360C">channels:</text>
+        <text x="225" y="75" font-size="9" fill="#795548">  telegram.botToken</text>
+        <text x="225" y="90" font-size="9" fill="#795548">  feishu.appId / appSecret</text>
+        <text x="215" y="112" font-size="10" fill="#BF360C">models:</text>
+        <text x="225" y="129" font-size="9" fill="#795548">  defaults.provider / model</text>
+        <text x="215" y="151" font-size="10" fill="#BF360C">auth.apiKeys:</text>
+        <text x="225" y="168" font-size="9" fill="#795548">  [{provider, keys: [...]}]</text>
+        <text x="215" y="192" font-size="10" fill="#BF360C">agents:</text>
+        <text x="225" y="205" font-size="9" fill="#795548">  defaults.prompt</text>
+
+        <line x1="150" y1="55" x2="198" y2="55" stroke="#66BB6A" stroke-width="2" marker-end="url(#ahg)" class="flowing"/>
+        <text x="174" y="48" font-size="8" fill="#2E7D32" text-anchor="middle">写 Key</text>
+
+        <!-- Config Loader -->
+        <rect x="490" y="50" width="160" height="120" rx="12" fill="none" stroke="#26C6DA" stroke-width="2"/>
+        <text x="570" y="44" font-size="10" font-weight="700" fill="#00838F" text-anchor="middle">Config Loader</text>
+        <rect x="505" y="62" width="130" height="25" rx="5" fill="#B2EBF2" filter="url(#sh)"/>
+        <text x="570" y="79" font-size="9" fill="#006064" text-anchor="middle" font-weight="600">1. 读取 JSON5</text>
+        <rect x="505" y="93" width="130" height="25" rx="5" fill="#B2EBF2" filter="url(#sh)"/>
+        <text x="570" y="110" font-size="9" fill="#006064" text-anchor="middle" font-weight="600">2. \${ENV_VAR} 替换</text>
+        <rect x="505" y="124" width="130" height="25" rx="5" fill="#B2EBF2" filter="url(#sh)"/>
+        <text x="570" y="141" font-size="9" fill="#006064" text-anchor="middle" font-weight="600">3. Schema 校验 (ajv)</text>
+
+        <line x1="430" y1="105" x2="503" y2="105" stroke="#26C6DA" stroke-width="2" marker-end="url(#ahc)" class="flowing"/>
+        <line x1="150" y1="131" x2="488" y2="110" stroke="#78909C" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+
+        <!-- openclaw uses it -->
+        <rect x="710" y="60" width="120" height="42" rx="8" fill="#42A5F5" filter="url(#sh)"/>
+        <text x="770" y="80" class="svc-label" style="font-size:10px">Telegram Bot</text>
+        <text x="770" y="93" class="svc-sub">读 botToken</text>
+        <rect x="710" y="115" width="120" height="42" rx="8" fill="#AB47BC" filter="url(#sh)"/>
+        <text x="770" y="135" class="svc-label" style="font-size:10px">Feishu Bot</text>
+        <text x="770" y="148" class="svc-sub">读 appId</text>
+        <line x1="650" y1="90" x2="708" y2="80" stroke="#42A5F5" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="650" y1="120" x2="708" y2="130" stroke="#AB47BC" stroke-width="1.5" marker-end="url(#ah)"/>
+      </svg>`;
+    },
+    content: `
+      <p class="desc">配置加载有 3 步：<strong>读取 JSON5</strong>（支持注释）→ <strong>\${ENV_VAR} 变量替换</strong> → <strong>Schema 校验</strong>。</p>
+      <div class="code-block">
+        <div class="code-hdr"><span>openclaw.json 结构（简化）</span></div>
+        <div class="code-body">{
+  <span class="fn">"channels"</span>: {
+<span class="hl">    <span class="fn">"telegram"</span>: {                        <span class="cm">// Telegram Bot 凭证</span></span>
+      <span class="fn">"botToken"</span>: <span class="str">"\${TELEGRAM_BOT_TOKEN}"</span>, <span class="cm">// 自动替换环境变量</span>
+      <span class="fn">"accounts"</span>: { ... }
+    },
+<span class="hl">    <span class="fn">"feishu"</span>: {                          <span class="cm">// 飞书凭证</span></span>
+      <span class="fn">"appId"</span>: <span class="str">"\${FEISHU_APP_ID}"</span>,
+      <span class="fn">"connectionMode"</span>: <span class="str">"websocket"</span>        <span class="cm">// websocket | webhook</span>
+    }
+  },
+  <span class="fn">"models"</span>: {
+    <span class="fn">"defaults"</span>: { <span class="fn">"provider"</span>: <span class="str">"anthropic"</span>, <span class="fn">"model"</span>: <span class="str">"claude-opus-4"</span> }
+  },
+<span class="hl">  <span class="fn">"auth"</span>: { <span class="fn">"apiKeys"</span>: [{ <span class="fn">"provider"</span>: <span class="str">"anthropic"</span>, <span class="fn">"keys"</span>: [<span class="str">"sk-ant-..."</span>] }] }</span>
+}</div>
+      </div>
+      <div class="info warn">
+        <span class="ico">&#128273;</span>
+        <div><strong>凭证优先级（高→低）：</strong>环境变量 > <code>.env</code> 文件 > <code>~/.openclaw/.env</code> > 配置文件 <code>env</code> 块 > 直接写在 JSON 里的值。
+        生产环境建议用环境变量，避免明文写入配置文件。</div>
+      </div>`
+  },
+  // 7 - Key Orchestrator
+  {
+    nav: 'Key 管线',
+    title: 'Key Orchestrator：API Key 自动同步',
+    viz() {
+      return `<svg viewBox="0 0 860 200" class="main-svg" style="height:200px">${S}
+        <rect x="20" y="45" width="130" height="50" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="85" y="68" class="svc-label" style="font-size:10px">new-api 站点</text>
+        <text x="85" y="83" class="svc-sub">hotaruapi.com 等</text>
+        <rect x="20" y="115" width="130" height="45" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="85" y="137" class="svc-label" style="font-size:10px">其他 LLM 平台</text>
+        <text x="85" y="150" class="svc-sub">HTTP Adapter</text>
+
+        <rect x="200" y="15" width="250" height="175" rx="12" fill="none" stroke="#66BB6A" stroke-width="2"/>
+        <text x="325" y="9" font-size="11" font-weight="700" fill="#2E7D32" text-anchor="middle">Key Orchestrator (claw 项目)</text>
+        <rect x="220" y="30" width="105" height="30" rx="6" fill="#81C784" filter="url(#sh)"/>
+        <text x="272" y="49" class="svc-label" style="font-size:9px">sync-keys.ts</text>
+        <rect x="335" y="30" width="100" height="30" rx="6" fill="#81C784" filter="url(#sh)"/>
+        <text x="385" y="49" class="svc-label" style="font-size:9px">stable-cycle.ts</text>
+        <rect x="220" y="75" width="215" height="30" rx="6" fill="#66BB6A" filter="url(#sh)"/>
+        <text x="327" y="94" class="svc-label" style="font-size:9px">export-openclaw-json.ts</text>
+        <rect x="220" y="120" width="105" height="30" rx="6" fill="#4CAF50" filter="url(#sh)"/>
+        <text x="272" y="139" class="svc-label" style="font-size:9px">plugin-host.ts</text>
+        <rect x="335" y="120" width="100" height="30" rx="6" fill="#4CAF50" filter="url(#sh)"/>
+        <text x="385" y="139" class="svc-label" style="font-size:9px">Adapters</text>
+        <rect x="220" y="160" width="215" height="22" rx="5" fill="#C8E6C9"/>
+        <text x="327" y="175" font-size="9" fill="#2E7D32" text-anchor="middle" font-weight="600">Cron: 每天 09:10 (supercronic + tsx)</text>
+
+        <line x1="150" y1="70" x2="218" y2="45" stroke="#FF9800" stroke-width="2" marker-end="url(#aho)" class="flowing"/>
+        <line x1="150" y1="137" x2="218" y2="135" stroke="#FF9800" stroke-width="2" marker-end="url(#aho)"/>
+
+        <!-- Output -->
+        <rect x="510" y="55" width="140" height="50" rx="8" fill="#FFA726" filter="url(#sh)"/>
+        <text x="580" y="78" class="svc-label" style="font-size:10px">openclaw.json</text>
+        <text x="580" y="93" class="svc-sub">更新 auth.apiKeys</text>
+        <line x1="435" y1="90" x2="508" y2="80" stroke="#66BB6A" stroke-width="2" marker-end="url(#ahg)" class="flowing"/>
+
+        <rect x="510" y="130" width="140" height="40" rx="8" fill="#78909C" filter="url(#sh)"/>
+        <text x="580" y="152" class="svc-label" style="font-size:9px">发送摘要到飞书</text>
+        <text x="580" y="164" class="svc-sub">openclaw CLI</text>
+        <line x1="435" y1="95" x2="508" y2="145" stroke="#78909C" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+
+        <!-- openclaw reads -->
+        <rect x="710" y="55" width="120" height="50" rx="8" fill="#7C4DFF" filter="url(#sh)"/>
+        <text x="770" y="78" class="svc-label" style="font-size:10px">openclaw</text>
+        <text x="770" y="93" class="svc-sub">读取 Key 使用</text>
+        <line x1="650" y1="80" x2="708" y2="80" stroke="#FFA726" stroke-width="2" marker-end="url(#aho)" class="flowing"/>
+      </svg>`;
+    },
+    content: `
+      <p class="desc"><strong>Key Orchestrator</strong> 是 claw 项目的核心服务，负责从各 new-api 站点<strong>自动同步 API Key</strong>：</p>
+      <div class="code-block">
+        <div class="code-hdr"><span>每日循环（stable-cycle.ts）</span></div>
+        <div class="code-body"><span class="cm">// 每天 09:10 由 supercronic 触发（npx tsx 运行）</span>
+<span class="num">1.</span> <span class="fn">syncKeys</span>()       <span class="cm">// 登录各 new-api 站点，拉取/创建 Token</span>
+<span class="num">2.</span> <span class="fn">filterHealthy</span>()  <span class="cm">// 过滤出可用的 Key</span>
+<span class="num">3.</span> <span class="fn">exportJson</span>()     <span class="cm">// 写入 openclaw.json 的 auth.apiKeys</span>
+<span class="num">4.</span> <span class="fn">sendSummary</span>()    <span class="cm">// 通过 openclaw CLI 发送同步摘要到飞书</span></div>
+      </div>
+      <div class="info note">
+        <span class="ico">&#128260;</span>
+        <div><strong>闭环协作：</strong>Key Orchestrator 同步完成后，还会通过 <code>openclaw message send --channel feishu</code>
+        把同步报告发到飞书群 —— 也就是说它反过来调用 openclaw 主程序来发消息，形成闭环。</div>
+      </div>`
+  },
+  // 8 - Streaming
+  {
+    nav: '流式回复',
+    title: '流式回复：打字机效果的实现',
+    viz: 'streaming',
+    content: `
+      <p class="desc">openclaw 的一大亮点是<strong>流式回复</strong>。LLM 返回 stream chunk 时，用户可以实时看到 AI "打字"：</p>
+      <div class="code-block">
+        <div class="code-hdr"><span>流式回复流程（简化）</span></div>
+        <div class="code-body"><span class="cm">// bot-message-dispatch.ts</span>
+<span class="kw">const</span> draft = <span class="fn">createDraftStream</span>({ <span class="var">maxChunkSize</span>: <span class="num">4000</span> });
+
+<span class="cm">// 1. 先发一条空消息占位</span>
+<span class="kw">const</span> msg = <span class="kw">await</span> bot.api.<span class="fn">sendMessage</span>(chatId, <span class="str">"..."</span>);
+
+<span class="cm">// 2. LLM stream chunk 到达时不断编辑</span>
+draft.<span class="fn">onChunk</span>(<span class="kw">async</span> (text) => {
+<span class="hl">  <span class="kw">await</span> bot.api.<span class="fn">editMessageText</span>(chatId, msg.message_id, text);</span>
+});
+
+<span class="cm">// 3. 超过 4000 字自动发新消息继续</span>
+draft.<span class="fn">onOverflow</span>(<span class="kw">async</span> () => {
+  msg = <span class="kw">await</span> bot.api.<span class="fn">sendMessage</span>(chatId, <span class="str">"..."</span>); <span class="cm">// 新消息</span>
+});</div>
+      </div>
+      <table class="tbl">
+        <tr><th>特性</th><th>Telegram</th><th>飞书</th></tr>
+        <tr><td>流式方式</td><td><code>editMessageText</code> 逐步更新</td><td><code>updateCardFeishu</code> 卡片更新</td></tr>
+        <tr><td>单消息上限</td><td>4096 字符（自动分段）</td><td>卡片无硬上限</td></tr>
+        <tr><td>Typing 指示</td><td><code>sendChatAction("typing")</code></td><td>无原生支持</td></tr>
+        <tr><td>确认反应</td><td>消息上加 Reaction</td><td>消息上加表情回应</td></tr>
+      </table>`
+  },
+  // 9 - Docker Deployment
+  {
+    nav: 'Docker 部署',
+    title: '完整部署拓扑',
+    viz() {
+      return `<svg viewBox="0 0 860 210" class="main-svg" style="height:210px">${S}
+        <!-- openclaw (outside Docker) -->
+        <rect x="20" y="15" width="280" height="80" rx="12" fill="none" stroke="#7C4DFF" stroke-width="2"/>
+        <text x="160" y="9" font-size="11" font-weight="700" fill="#7C4DFF" text-anchor="middle">openclaw 主程序 (宿主机 / 独立容器)</text>
+        <rect x="35" y="30" width="80" height="35" rx="6" fill="#42A5F5" filter="url(#sh)"/>
+        <text x="75" y="50" class="svc-label" style="font-size:9px">Telegram</text>
+        <rect x="125" y="30" width="70" height="35" rx="6" fill="#AB47BC" filter="url(#sh)"/>
+        <text x="160" y="50" class="svc-label" style="font-size:9px">飞书</text>
+        <rect x="205" y="30" width="80" height="35" rx="6" fill="#FF7043" filter="url(#sh)"/>
+        <text x="245" y="50" class="svc-label" style="font-size:9px">Agent+LLM</text>
+        <text x="160" y="82" font-size="9" fill="#7C4DFF" text-anchor="middle">openclaw start</text>
+
+        <!-- Docker Compose (claw) -->
+        <rect x="350" y="15" width="490" height="185" rx="12" fill="none" stroke="#26C6DA" stroke-width="2" stroke-dasharray="6 3"/>
+        <text x="595" y="9" font-size="11" font-weight="700" fill="#00838F" text-anchor="middle">docker compose (claw 辅助管线)</text>
+        <rect x="370" y="30" width="120" height="45" rx="8" fill="#66BB6A" filter="url(#sh)"/>
+        <text x="430" y="50" class="svc-label" style="font-size:10px">Key Orchestrator</text>
+        <text x="430" y="63" class="svc-sub">Cron 同步 Key</text>
+        <rect x="510" y="30" width="110" height="45" rx="8" fill="#78909C" filter="url(#sh)"/>
+        <text x="565" y="50" class="svc-label" style="font-size:10px">Monitor</text>
+        <text x="565" y="63" class="svc-sub">LinuxDo 福利</text>
+        <rect x="640" y="30" width="100" height="45" rx="8" fill="#BDBDBD" filter="url(#sh)"/>
+        <text x="690" y="50" class="svc-label" style="font-size:10px">Gateway</text>
+        <text x="690" y="63" class="svc-sub">Stub :3000</text>
+        <rect x="370" y="90" width="120" height="42" rx="8" fill="#BDBDBD" filter="url(#sh)"/>
+        <text x="430" y="110" class="svc-label" style="font-size:9px">config-init</text>
+        <text x="430" y="123" class="svc-sub">初始化配置</text>
+
+        <!-- Shared config -->
+        <rect x="420" y="148" width="170" height="42" rx="8" fill="#FFA726" filter="url(#sh)"/>
+        <text x="505" y="168" class="svc-label" style="font-size:10px">openclaw.json</text>
+        <text x="505" y="181" class="svc-sub">Docker Volume / 共享文件</text>
+        <line x1="430" y1="75" x2="480" y2="146" stroke="#66BB6A" stroke-width="1.5" marker-end="url(#ahg)"/>
+        <text x="445" y="118" font-size="8" fill="#2E7D32">写入</text>
+
+        <!-- openclaw reads config -->
+        <line x1="420" y1="169" x2="302" y2="80" stroke="#FFA726" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#aho)"/>
+        <text x="350" y="130" font-size="9" fill="#E65100" text-anchor="middle">读取 Key</text>
+
+        <!-- LLM APIs -->
+        <rect x="640" y="148" width="100" height="42" rx="8" fill="#FF9800" filter="url(#sh)"/>
+        <text x="690" y="168" class="svc-label" style="font-size:10px">LLM APIs</text>
+        <text x="690" y="181" class="svc-sub">OpenAI / Claude</text>
+        <line x1="245" y1="65" x2="638" y2="165" stroke="#FF7043" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#ah)"/>
+      </svg>`;
+    },
+    content: `
+      <p class="desc">完整部署中，<strong>openclaw 主程序</strong>和 <strong>claw 辅助管线</strong>是两个独立进程/容器组：</p>
+      <table class="tbl">
+        <tr><th>组件</th><th>运行方式</th><th>职责</th><th>技术栈</th></tr>
+        <tr><td><strong style="color:#7C4DFF">openclaw 主程序</strong></td><td><code>openclaw start</code>（宿主机 / 独立容器）</td><td>Telegram/飞书 Bot + Agent + LLM 调用</td><td>TypeScript + grammy + @larksuiteoapi</td></tr>
+        <tr><td><strong style="color:#66BB6A">Key Orchestrator</strong></td><td>Docker Compose（Cron 定时）</td><td>同步 API Key → 写入 openclaw.json</td><td>TypeScript strict + pnpm + Zod + tslog + tsx</td></tr>
+        <tr><td><strong style="color:#78909C">Monitor</strong></td><td>Docker Compose</td><td>LinuxDo 福利监控 → Telegram 推送</td><td>TypeScript ESM + tsx</td></tr>
+        <tr><td><strong style="color:#BDBDBD">Gateway (stub)</strong></td><td>Docker Compose</td><td>健康检查占位</td><td>Node.js HTTP</td></tr>
+      </table>
+      <div class="info note">
+        <span class="ico">&#128736;</span>
+        <div><strong>claw 技术栈已全面升级：</strong>所有 <code>.mjs</code> 已迁移为 <strong>TypeScript strict</strong>，
+        包管理从 npm 切换到 <strong>pnpm</strong> workspace，新增 <strong>Zod</strong> 配置校验、<strong>tslog</strong> 结构化日志、
+        <strong>Vitest</strong> 测试套件（43 个测试覆盖核心模块）。Docker 容器通过 <code>npx tsx</code> 直接运行 <code>.ts</code> 文件，无需编译步骤。</div>
+      </div>
+      <div class="info idea">
+        <span class="ico">&#127919;</span>
+        <div><strong>Gateway stub 的未来：</strong>当前 Bot 逻辑在 openclaw 主程序里。未来如果需要把 Bot 也容器化并水平扩展，
+        <code>claw/gateway</code> 就可以从 stub 演进为独立的 HTTP 网关，接收 Webhook 并分发给多个 Agent 实例。</div>
+      </div>`
+  }
+];
+
+const totalSteps = STEPS.length;
+let currentStep = 0, isPlaying = false, playTimer = null, playSpeed = 2200;
+
+function nextStep(){if(currentStep<totalSteps-1){currentStep++;render()}}
+function prevStep(){if(currentStep>0){currentStep--;render()}}
+function goToStep(n){currentStep=Math.max(0,Math.min(n,totalSteps-1));render()}
+function togglePlay(){
+  isPlaying=!isPlaying;
+  if(isPlaying){playTimer=setInterval(()=>{if(currentStep<totalSteps-1)nextStep();else togglePlay()},playSpeed)}
+  else clearInterval(playTimer);
+  document.getElementById('playBtn').innerHTML=isPlaying?'&#9646;&#9646; 暂停':'&#9654; 播放';
+}
+function setSpeed(s){playSpeed=s;if(isPlaying){clearInterval(playTimer);playTimer=setInterval(()=>{if(currentStep<totalSteps-1)nextStep();else togglePlay()},playSpeed)}}
+document.addEventListener('keydown',e=>{
+  if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+  if(e.key==='ArrowLeft')prevStep();else if(e.key==='ArrowRight')nextStep();
+  else if(e.key===' '){e.preventDefault();togglePlay()}
+  else if(e.key==='Home')goToStep(0);else if(e.key==='End')goToStep(totalSteps-1);
+});
+
+const LC=[
+  {icon:'&#128172;',title:'接收消息',desc:'Polling / WS',bg:'#42A5F5'},
+  {icon:'&#128275;',title:'去重校验',desc:'Update ID',bg:'#78909C'},
+  {icon:'&#128260;',title:'构建上下文',desc:'统一消息格式',bg:'#7C4DFF'},
+  {icon:'&#128214;',title:'加载会话',desc:'Session History',bg:'#26C6DA'},
+  {icon:'&#129302;',title:'Agent 调度',desc:'选模型 + Prompt',bg:'#AB47BC'},
+  {icon:'&#9889;',title:'调用 LLM',desc:'Stream Chunks',bg:'#FF7043'},
+  {icon:'&#128172;',title:'流式回复',desc:'send + edit',bg:'#66BB6A'}
+];
+let lcAnim=null,lcStep=0;
+
+function renderLifecycleViz(el){
+  clearInterval(lcAnim);lcStep=0;
+  function draw(){
+    el.innerHTML=`<div class="lifecycle">${LC.map((n,i)=>{
+      const c=i===lcStep?'active-lc':i<lcStep?'':'dim-lc';
+      return (i>0?`<div class="lc-arrow${i>lcStep?' dim-lc':''}">&#10132;</div>`:'')+
+        `<div class="lc-node ${c}" style="background:${n.bg}"><div class="lc-icon">${n.icon}</div><div class="lc-title">${n.title}</div><div class="lc-desc">${n.desc}</div></div>`;
+    }).join('')}</div>`;
+  }
+  draw();
+  lcAnim=setInterval(()=>{lcStep=(lcStep+1)%LC.length;draw()},1100);
+}
+
+function renderStreamingViz(el){
+  let frame=0;
+  const full="OpenClaw 是一个基于插件架构的多渠道 AI 对话平台，支持 Telegram、飞书、Slack 等 40+ 渠道...";
+  function draw(){
+    const shown=full.substring(0,Math.min(frame*3,full.length));
+    const done=frame*3>=full.length;
+    el.innerHTML=`<div style="max-width:700px;margin:0 auto;padding:20px 0">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div style="background:#0088CC;color:white;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0">&#128100;</div>
+        <div style="background:#f0f4f8;padding:10px 14px;border-radius:10px;font-size:.9em;color:#333">帮我介绍一下 OpenClaw</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:flex-start;margin-top:14px">
+        <div style="background:#7C4DFF;color:white;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2em;flex-shrink:0">&#129302;</div>
+        <div style="background:white;padding:10px 14px;border-radius:10px;font-size:.9em;border:1px solid #E0E0E0;min-width:200px;min-height:40px;color:#333">
+          ${shown}${done?'':'<span style="animation:blink 1s infinite;color:#7C4DFF">|</span>'}
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:12px;font-size:.78em;color:#9E9E9E">${done?'&#9989; 回复完成':'&#9889; 流式输出中... editMessageText() x'+frame}</div>
+    </div>
+    <style>@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}</style>`;
+    if(!done){frame++;setTimeout(draw,180)}
+  }
+  frame=0;draw();
+}
+
+function render(){
+  const s=STEPS[currentStep];
+  document.getElementById('stepNav').innerHTML=STEPS.map((st,i)=>{
+    const c=i===currentStep?'active':i<currentStep?'completed':'';
+    return `<li class="${c}" onclick="goToStep(${i})"><span class="dot"></span><span>${st.nav}</span></li>`;
+  }).join('');
+  document.getElementById('stepContent').innerHTML=`<div class="step-title-bar"><div class="step-num">${currentStep+1}</div><div class="step-title-text">${s.title}</div></div>${s.content}`;
+
+  clearInterval(lcAnim);
+  const area=document.getElementById('vizArea');
+  if(s.viz==='lifecycle') renderLifecycleViz(area);
+  else if(s.viz==='streaming') renderStreamingViz(area);
+  else if(typeof s.viz==='function') area.innerHTML=s.viz();
+  else area.innerHTML='';
+
+  document.getElementById('progBar').max=totalSteps-1;
+  document.getElementById('progBar').value=currentStep;
+  document.getElementById('stepInd').textContent=`${currentStep+1} / ${totalSteps}`;
+  document.getElementById('prevBtn').disabled=currentStep===0;
+  document.getElementById('nextBtn').disabled=currentStep===totalSteps-1;
+}
+
+function copyCode(btn){
+  const t=btn.closest('.code-block').querySelector('.code-body').textContent;
+  navigator.clipboard.writeText(t).then(()=>{btn.textContent='已复制!';setTimeout(()=>{btn.textContent='复制'},1500)});
+}
+render();
+</script>
+</body>
+</html>
