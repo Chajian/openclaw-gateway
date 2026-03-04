@@ -19,12 +19,12 @@
     "export:json": "node src/export-openclaw-json.mjs"
   },
   "dependencies": {
-    "@openclaw/core": "*",
-    "@openclaw/plugin-adapter-newapi": "*",
-    "@openclaw/plugin-linuxdo-discover": "*",
-    "@openclaw/plugin-linuxdo-onboard": "*",
-    "@openclaw/plugin-linuxdo-monitor": "*",
-    "@openclaw/plugin-schedule-windows": "*"
+    "@openclaw/core": "workspace:*",
+    "@openclaw/plugin-adapter-newapi": "workspace:*",
+    "@openclaw/plugin-linuxdo-discover": "workspace:*",
+    "@openclaw/plugin-linuxdo-onboard": "workspace:*",
+    "@openclaw/plugin-linuxdo-monitor": "workspace:*",
+    "@openclaw/plugin-schedule-windows": "workspace:*"
   },
   "engines": {
     "node": ">=20.0.0"

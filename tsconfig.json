@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/plugin-adapter-newapi" },
+    { "path": "packages/plugin-linuxdo-discover" },
+    { "path": "packages/plugin-linuxdo-onboard" },
+    { "path": "packages/plugin-linuxdo-monitor" },
+    { "path": "packages/plugin-schedule-windows" }
+  ]
+}

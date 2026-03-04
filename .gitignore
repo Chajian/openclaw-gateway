@@ -2,6 +2,10 @@ node_modules/
 .env
 data/
 
+# TypeScript build output
+dist/
+*.tsbuildinfo
+
 # runtime configs (use *.example.json as template)
 config/openclaw.json
 key-orchestrator/config/sites.json

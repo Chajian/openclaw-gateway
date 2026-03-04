@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "OpenClaw plugin: automated LinuxDo OAuth browser onboarding for new-api sites.",
-  "main": "src/index.mjs",
+  "main": "src/index.ts",
   "openclaw": {
     "type": "plugin",
     "provides": {
@@ -16,7 +16,7 @@
     "onboard": "node src/onboard-linuxdo-oauth-sites.mjs"
   },
   "dependencies": {
-    "@openclaw/core": "*"
+    "@openclaw/core": "workspace:*"
   },
   "engines": {
     "node": ">=20.0.0"

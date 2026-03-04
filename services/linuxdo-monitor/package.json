@@ -1,0 +1,15 @@
+{
+  "name": "openclaw-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "monitor.ts",
+  "scripts": {
+    "start": "tsx monitor.ts",
+    "start:once": "tsx monitor.ts --once"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "@types/node": "^22.15.0"
+  }
+}

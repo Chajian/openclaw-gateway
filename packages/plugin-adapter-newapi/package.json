@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "OpenClaw plugin: new-api site adapter and onboard command.",
-  "main": "src/index.mjs",
+  "main": "src/index.ts",
   "openclaw": {
     "type": "plugin",
     "provides": {
@@ -13,7 +13,7 @@
     }
   },
   "dependencies": {
-    "@openclaw/core": "*"
+    "@openclaw/core": "workspace:*"
   },
   "engines": {
     "node": ">=20.0.0"

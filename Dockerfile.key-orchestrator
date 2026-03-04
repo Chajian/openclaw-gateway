@@ -6,11 +6,12 @@ RUN apk add --no-cache curl \
  && chmod +x /usr/local/bin/supercronic
 
 WORKDIR /app
-COPY package.json ./
+RUN corepack enable
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/ packages/
 COPY key-orchestrator/ key-orchestrator/
 
-RUN npm install --production
+RUN pnpm install --frozen-lockfile
 
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
