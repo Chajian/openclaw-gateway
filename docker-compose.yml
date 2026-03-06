@@ -15,22 +15,40 @@ services:
           echo "[config-init] /config/openclaw.json already exists, skipping"
         fi
 
-  # ---- Gateway：Telegram/飞书/Discord → LLM 路由 ----
-  openclaw-gateway:
-    build:
-      context: ./gateway
-      dockerfile: Dockerfile
+  # ---- OpenClaw 主程序：Telegram/飞书/Discord → Agent → LLM ----
+  openclaw:
+    image: ${OPENCLAW_IMAGE:-openclaw:local}
     depends_on:
       config-init:
         condition: service_completed_successfully
     env_file: .env
     environment:
-      - OPENCLAW_CONFIG=/config/openclaw.json
+      - HOME=/home/node
+      - TERM=xterm-256color
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
     volumes:
-      - openclaw-config:/config
+      - openclaw-config:/home/node/.openclaw
+      - openclaw-workspace:/home/node/.openclaw/workspace
     ports:
-      - "${GATEWAY_PORT:-3000}:3000"
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
     restart: unless-stopped
+    command:
+      [
+        "node", "openclaw.mjs", "gateway",
+        "--bind", "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port", "18789",
+        "--allow-unconfigured"
+      ]
+    healthcheck:
+      test: ["CMD", "node", "-e",
+        "fetch('http://127.0.0.1:18789/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ---- LinuxDo 福利监控 → Telegram 推送 ----
   linuxdo-monitor:
@@ -40,7 +58,14 @@ services:
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SUB_CODE=${SUB_CODE:-}
+      - PUSH_MODE=${PUSH_MODE:-auto}
+      - SUBSCRIBERS_FILE=${SUBSCRIBERS_FILE:-/data/subscribers.json}
+      - TELEGRAM_POLL_INTERVAL_MS=${TELEGRAM_POLL_INTERVAL_MS:-5000}
+      - DATA_DIR=${DATA_DIR:-/data}
       - MONITOR_INTERVAL_MS=${MONITOR_INTERVAL_MS:-600000}
+    volumes:
+      - linuxdo-monitor-data:/data
     restart: unless-stopped
 
   # ---- Key 管线：定时同步 + 导出 openclaw.json ----
@@ -57,9 +82,12 @@ services:
       - CRON_SCHEDULE=${CRON_SCHEDULE:-0 10 9 * * *}
     volumes:
       - openclaw-config:/config
+      - ./key-orchestrator/config:/app/config:ro
       - key-data:/app/data
     restart: unless-stopped
 
 volumes:
   openclaw-config:
+  openclaw-workspace:
   key-data:
+  linuxdo-monitor-data:
